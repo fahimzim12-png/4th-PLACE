@@ -55,3 +55,22 @@ button:active{transform:translateY(2px);box-shadow:0 1px 0 var(--ink)}
   width: 100%;
   box-sizing: border-box;
 }
+
+.card.lb #lb {
+  display: block !important;
+  width: 100% !important;
+  max-height: 320px !important;
+  overflow-y: scroll !important;
+  overflow-x: hidden !important;
+}
+
+.card.lb #lb > div {
+  display: flex !important;
+  flex-direction: row !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  width: 100% !important;
+  min-height: 32px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
