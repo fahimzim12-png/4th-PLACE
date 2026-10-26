@@ -100,7 +100,6 @@ function render(){
       ).join('')
     : '<div>No scores yet. Be the first!</div>';
 }
-$('lb').innerHTML=t.length?t.map((r,i)=>'<div><span class="n">'+m[i]+' '+esc(r.name)+'</span><b>'+r.score+'</b></div>').join(''):'<div>No scores yet. Be the first!</div>'}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function loadLocal(){try{rows=JSON.parse(localStorage.getItem('4p_lb')||'[]')}catch(e){rows=[]}}
 function pid(n){return 'p_'+Array.from(new TextEncoder().encode(n.toLowerCase())).map(b=>b.toString(16).padStart(2,'0')).join('')}
