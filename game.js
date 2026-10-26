@@ -87,13 +87,25 @@ const online=!!(CFG.apiKey&&CFG.projectId&&!/YOUR/i.test(CFG.apiKey+CFG.projectI
 const BASE=online?'https://firestore.googleapis.com/v1/projects/'+CFG.projectId+'/databases/(default)/documents':'';
 const KEY=online?'?key='+encodeURIComponent(CFG.apiKey):'';
 let rows=[];
-function render(){const t=rows.slice().sort((a,b)=>b.score-a.score).slice(0,3);const m=['🥇','🥈','🥉'];
+function render(){
+  const t = rows.slice().sort((a,b) => b.score - a.score);
+  const m = ['🥇','🥈','🥉'];
+
+  $('lb').innerHTML = t.length
+    ? t.map((r,i) =>
+        '<div><span class="n">' +
+        (i < 3 ? m[i] : '#' + (i + 1)) +
+        ' ' + esc(r.name) +
+        '</span><b>' + r.score + '</b></div>'
+      ).join('')
+    : '<div>No scores yet. Be the first!</div>';
+}
 $('lb').innerHTML=t.length?t.map((r,i)=>'<div><span class="n">'+m[i]+' '+esc(r.name)+'</span><b>'+r.score+'</b></div>').join(''):'<div>No scores yet. Be the first!</div>'}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function loadLocal(){try{rows=JSON.parse(localStorage.getItem('4p_lb')||'[]')}catch(e){rows=[]}}
 function pid(n){return 'p_'+Array.from(new TextEncoder().encode(n.toLowerCase())).map(b=>b.toString(16).padStart(2,'0')).join('')}
 async function fetchTop(){
-try{const r=await fetch(BASE+':runQuery'+KEY,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({structuredQuery:{from:[{collectionId:'scores'}],orderBy:[{field:{fieldPath:'score'},direction:'DESCENDING'}],limit:3}})});
+try{const r=await fetch(BASE+':runQuery'+KEY,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({structuredQuery:{from:[{collectionId:'scores'}],orderBy:[{field:{fieldPath:'score'},direction:'DESCENDING'}],limit:200}})});
 if(!r.ok)throw 0;const j=await r.json();
 rows=j.filter(x=>x.document).map(x=>({name:x.document.fields.name.stringValue,score:parseInt(x.document.fields.score.integerValue,10)}));
 render();$('lbnote').textContent='Live leaderboard · same for everyone.'}
