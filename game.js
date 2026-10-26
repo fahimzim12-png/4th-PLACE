@@ -1,6 +1,8 @@
 (function(){
 const N=20,S=18,cv=document.getElementById('c'),ctx=cv.getContext('2d');
 const $=id=>document.getElementById(id);
+  const gameOverSound = new Audio('./gameover.mp3');
+gameOverSound.preload = 'auto';
 const FOODS=['🍔','🍟','🥤'],INK='#1d2a0c';
 let snake,dir,nd,food,score,alive=false,timer,speed,best=0,bonus=null;
 // ---------- AUDIO ----------
@@ -60,7 +62,7 @@ if(h.x==food.x&&h.y==food.y){score+=10;ate=true;spawn();if(!bonus&&Math.random()
 else if(bonus&&h.x==bonus.x&&h.y==bonus.y){score+=20;ate=true;bonus=null}
 if(ate){$('sc').textContent=score;speed=Math.max(70,speed-3);blip();khaichi()}else snake.pop();
 if(bonus&&--bonus.ttl<=0)bonus=null;draw()}
-function die(){alive=false;musicStop();scream();draw(true);
+function die(){alive=false;musicStop();scream();gameOverSound.currentTime=0;gameOverSound.play().catch(()=>{});draw(true);
 if(score>best){best=score;$('bs').textContent=best}
 $('res').innerHTML='YOU SCORED<br><b style="font-size:18px">'+score+'</b>';$('over').classList.remove('hide');submit(score)}
 function draw(dead){ctx.fillStyle='#b5d62b';ctx.fillRect(0,0,360,360);
