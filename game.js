@@ -124,6 +124,6 @@ if(s>old){await fetch(url,{method:'PATCH',headers:{'Content-Type':'application/j
 }catch(e){}
 fetchTop()}
 draw=draw;reset();draw();
-if(online){$('lb').innerHTML='<div>Loading…</div>';fetchTop();setInterval(()=>{if(!document.hidden)fetchTop()},20000)}
+if(online){$('lb').innerHTML='<div>Loading…</div>';fetchTop();}
 else{loadLocal();render();$('lbnote').textContent='Leaderboard on this device only (online leaderboard not set up).'}
 })();
