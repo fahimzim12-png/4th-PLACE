@@ -128,7 +128,7 @@ try{const r=await fetch(BASE+':runQuery'+KEY,{method:'POST',headers:{'Content-Ty
 if(!r.ok)throw 0;const j=await r.json();
 rows=j.filter(x=>x.document).map(x=>({name:x.document.fields.name.stringValue,score:parseInt(x.document.fields.score.integerValue,10)}));
 render();$('lbnote').textContent='Live leaderboard · same for everyone.'}
-catch(e){$('lbnote').textContent='Leaderboard offline – retrying…'}}
+catch(e){   loadLocal();   render();   $('lbnote').textContent='Online leaderboard unavailable. Showing this device’s scores.'; }}
 
 async function submit(s) {
   const name = $('nm').value.trim().slice(0, 14) || 'Player';
@@ -182,9 +182,24 @@ async function submit(s) {
 
     await fetchTop();
   } catch (e) {
-    $('lbnote').textContent = 'Leaderboard temporarily unavailable';
-    console.error('Leaderboard error:', e);
+  loadLocal();
+  const name = $('nm').value.trim().slice(0, 14) || 'Player';
+  const r = rows.find(x => x.name === name);
+
+  if (r) {
+    r.score = Math.max(r.score, s);
+  } else {
+    rows.push({ name, score: s });
   }
+
+  try {
+    localStorage.setItem('4p_lb', JSON.stringify(rows));
+  } catch (err) {}
+
+  render();
+  $('lbnote').textContent = 'Online leaderboard unavailable. Score saved on this device.';
+  console.error('Leaderboard error:', e);
+}
 }
 draw=draw;reset();draw();
 if(online){$('lb').innerHTML='<div>Loading…</div>';fetchTop();}
