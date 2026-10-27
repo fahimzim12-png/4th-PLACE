@@ -550,19 +550,39 @@
       y: b[0].y + dir.y
     }));
 
-    // If EITHER snake hits a wall or its OWN body, the run ends.
-    // The two snakes pass through each other, so turning never makes them
-    // crash into one another (the second snake is always a fixed offset
-    // from the first, so any turn would otherwise cause a collision).
+   
+    // Each snake checks walls and its OWN body only.
+    // The two snakes completely ignore each other's bodies.
     for (let i = 0; i < heads.length; i++) {
       const h = heads[i];
-      const own = bodies[i].some(c => c.x === h.x && c.y === h.y);
+      const body = bodies[i];
 
-      if (!inBounds(h.x, h.y) || own) {
+      if (!inBounds(h.x, h.y)) {
+        die();
+        return;
+      }
+
+      // Determine whether this snake will eat on this move.
+      const willEat =
+        foods.some(f => f.x === h.x && f.y === h.y) ||
+        (!dual && !!bonus &&
+          bonus.x === h.x && bonus.y === h.y) ||
+        (!dual && onGiant(h.x, h.y));
+
+      // The tail moves away if the snake doesn't eat.
+      // Therefore, moving into its current tail cell is safe.
+      const checkBody = willEat ? body : body.slice(0, -1);
+
+      const ownCollision = checkBody.some(
+        c => c.x === h.x && c.y === h.y
+      );
+
+      if (ownCollision) {
         die();
         return;
       }
     }
+
 
     let ate = 0;
     let regular = 0;
