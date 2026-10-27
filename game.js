@@ -550,9 +550,15 @@
       y: b[0].y + dir.y
     }));
 
-    // If EITHER snake crashes (wall, itself, or the other snake), the run ends.
-    for (const h of heads) {
-      if (!inBounds(h.x, h.y) || onSnakes(h.x, h.y)) {
+    // If EITHER snake hits a wall or its OWN body, the run ends.
+    // The two snakes pass through each other, so turning never makes them
+    // crash into one another (the second snake is always a fixed offset
+    // from the first, so any turn would otherwise cause a collision).
+    for (let i = 0; i < heads.length; i++) {
+      const h = heads[i];
+      const own = bodies[i].some(c => c.x === h.x && c.y === h.y);
+
+      if (!inBounds(h.x, h.y) || own) {
         die();
         return;
       }
@@ -775,8 +781,8 @@
       ctx.font = '15px serif';
     }
 
-    drawSnake(snake, INK, dead);
     if (snakeB) drawSnake(snakeB, INK_B, dead);
+    drawSnake(snake, INK, dead);
 
     // countdown bar along the top edge during Dual Mode
     if (dual && !dead) {
