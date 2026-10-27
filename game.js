@@ -1,208 +1,915 @@
-(function(){
-const N=20,S=18,cv=document.getElementById('c'),ctx=cv.getContext('2d');
-const $=id=>document.getElementById(id);
-  const gameOverSound = new Audio('./gameover.mp3');
-gameOverSound.preload = 'auto';
-const FOODS=['🍔','🍟','🥤'],INK='#1d2a0c';
-let snake,dir,nd,food,score,alive=false,timer,speed,best=0,bonus=null;
-// ---------- AUDIO ----------
-let AC,master,muted=false,musicOn=false,step=0,mt;
-function ac(){if(!AC){try{AC=new (window.AudioContext||window.webkitAudioContext)();master=AC.createGain();master.gain.value=.5;master.connect(AC.destination)}catch(e){}}if(AC&&AC.state==='suspended')AC.resume();return AC}
-function tone(f,t,d,type,v,dst){const o=AC.createOscillator(),g=AC.createGain();o.type=type;o.frequency.value=f;g.gain.setValueAtTime(v,t);g.gain.exponentialRampToValueAtTime(.001,t+d);o.connect(g);g.connect(dst||master);o.start(t);o.stop(t+d+.02)}
-const mel=[523,0,659,784,659,0,523,392, 587,0,698,880,698,0,587,440, 523,659,784,1047,784,659,523,0, 392,494,587,494,392,0,330,0];
-const bas=[131,131,196,196,147,147,220,220,131,131,196,196,98,98,165,165];
-function sched(){if(!AC||!musicOn||muted)return;const t=AC.currentTime+.02,i=step%32;
-if(mel[i])tone(mel[i],t,.16,'square',.07);
-if(i%2==0)tone(bas[(i>>1)%16],t,.28,'triangle',.18);
-step++}
-function musicStart(){if(!ac())return;musicOn=true;clearInterval(mt);mt=setInterval(sched,140)}
-function musicStop(){musicOn=false;clearInterval(mt)}
-function blip(){if(!ac()||muted)return;const t=AC.currentTime;tone(880,t,.08,'square',.12);tone(1320,t+.07,.1,'square',.12)}
-function scream(){if(!ac()||muted)return;const t=AC.currentTime;
-const o=AC.createOscillator(),o2=AC.createOscillator(),g=AC.createGain(),f=AC.createBiquadFilter();
-o.type='sawtooth';o2.type='square';f.type='bandpass';f.Q.value=2;
-o.frequency.setValueAtTime(500,t);o.frequency.exponentialRampToValueAtTime(1500,t+.25);o.frequency.exponentialRampToValueAtTime(350,t+1.1);
-o2.frequency.setValueAtTime(507,t);o2.frequency.exponentialRampToValueAtTime(1530,t+.25);o2.frequency.exponentialRampToValueAtTime(355,t+1.1);
-f.frequency.setValueAtTime(1200,t);f.frequency.linearRampToValueAtTime(2200,t+.4);
-const lfo=AC.createOscillator(),lg=AC.createGain();lfo.frequency.value=28;lg.gain.value=60;lfo.connect(lg);lg.connect(o.frequency);lfo.start(t);lfo.stop(t+1.2);
-g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.35,t+.05);g.gain.exponentialRampToValueAtTime(.001,t+1.2);
-o.connect(f);o2.connect(f);f.connect(g);g.connect(master);o.start(t);o2.start(t);o.stop(t+1.25);o2.stop(t+1.25)}
-let bnVoice=null;
-function pickVoice(){try{const v=speechSynthesis.getVoices();const bn=v.filter(x=>/^bn/i.test(x.lang)||/bengali|bangla/i.test(x.name));bnVoice=bn.find(x=>/\bmale\b|madhur|pradeep|bashkar/i.test(x.name)&&!/female/i.test(x.name))||bn[0]||null}catch(e){}}
-try{pickVoice();speechSynthesis.onvoiceschanged=pickVoice}catch(e){}
-function shout(){if(!ac()||muted)return;const t=AC.currentTime,D=.7;
-const o=AC.createOscillator(),ws=AC.createWaveShaper(),out=AC.createGain(),lf=AC.createOscillator(),lg=AC.createGain();
-const cv2=new Float32Array(256);for(let i=0;i<256;i++)cv2[i]=Math.tanh((i/128-1)*7);ws.curve=cv2;
-o.type='sawtooth';o.frequency.setValueAtTime(140,t);o.frequency.linearRampToValueAtTime(185,t+.22);o.frequency.exponentialRampToValueAtTime(90,t+D);
-lf.frequency.value=38;lg.gain.value=9;lf.connect(lg);lg.connect(o.frequency);
-out.gain.setValueAtTime(.0001,t);out.gain.exponentialRampToValueAtTime(1.4,t+.04);out.gain.setValueAtTime(1.4,t+.5);out.gain.exponentialRampToValueAtTime(.001,t+D);
-const F=[[[750,700,350,320],[1,1,1,1]],[[1250,1300,2200,2300],[.7,.7,.7,.7]]],T=[0,.22,.32,.5];
-F.forEach(([fr,gn])=>{const b=AC.createBiquadFilter(),g=AC.createGain();b.type='bandpass';b.Q.value=7;g.gain.value=gn[0];
-b.frequency.setValueAtTime(fr[0],t);fr.forEach((f,i)=>b.frequency.linearRampToValueAtTime(f,t+T[i]));
-ws.connect(b);b.connect(g);g.connect(out)});
-o.connect(ws);out.connect(master);o.start(t);lf.start(t);o.stop(t+D+.05);lf.stop(t+D+.05);
-const nb=AC.createBuffer(1,AC.sampleRate*.2,AC.sampleRate),d=nb.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;
-[0,.42].forEach(off=>{const s=AC.createBufferSource(),b=AC.createBiquadFilter(),g=AC.createGain();s.buffer=nb;b.type='bandpass';b.frequency.value=off?4200:1800;g.gain.setValueAtTime(.7,t+off);g.gain.exponentialRampToValueAtTime(.001,t+off+.12);s.connect(b);b.connect(g);g.connect(master);s.start(t+off);s.stop(t+off+.15)})}
-let khLoading=false;let khBuf=null;
-function loadKh(){if(khBuf||!AC||khLoading||typeof KH64==='undefined')return;khLoading=true;try{const s=atob(KH64),u=new Uint8Array(s.length);for(let i=0;i<s.length;i++)u[i]=s.charCodeAt(i);AC.decodeAudioData(u.buffer,b=>{khBuf=b},()=>{khLoading=false})}catch(e){khLoading=false}}
-function khaichi(){if(muted||!ac())return;loadKh();if(!khBuf){shout();return}
-const s=AC.createBufferSource(),g=AC.createGain(),c=AC.createDynamicsCompressor();s.buffer=khBuf;s.playbackRate.value=1.03;g.gain.value=1.5;s.connect(g);g.connect(c);c.connect(AC.destination);s.start()}
-function oldKhaichi(){if(muted)return;try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance('খাইছি!');u.lang='bn-BD';if(bnVoice){u.voice=bnVoice;u.lang=bnVoice.lang}u.rate=1.2;u.pitch=0;u.volume=1;speechSynthesis.speak(u)}catch(e){}}
-// ---------- GAME ----------
-function rnd(n){return Math.floor(Math.random()*n)}
-function free(){let p;do{p={x:rnd(N),y:rnd(N)}}while(snake.some(s=>s.x==p.x&&s.y==p.y)||(bonus&&bonus.x==p.x&&bonus.y==p.y));return p}
-function spawn(){food=free();food.e=FOODS[rnd(3)]}
-function reset(){snake=[{x:6,y:10},{x:5,y:10},{x:4,y:10}];dir=nd={x:1,y:0};score=0;speed=150;bonus=null;spawn();$('sc').textContent=0}
-function start(){ac();loadKh();setTimeout(loadKh,300);reset();alive=true;$('start').classList.add('hide');$('over').classList.add('hide');musicStart();loop()}
-function loop(){clearTimeout(timer);if(!alive)return;tick();if(alive)timer=setTimeout(loop,speed)}
-function tick(){dir=nd;const h={x:snake[0].x+dir.x,y:snake[0].y+dir.y};
-if(h.x<0||h.y<0||h.x>=N||h.y>=N||snake.some(s=>s.x==h.x&&s.y==h.y)){return die()}
-snake.unshift(h);let ate=false;
-if(h.x==food.x&&h.y==food.y){score+=10;ate=true;spawn();if(!bonus&&Math.random()<.2){bonus=free();bonus.ttl=50}}
-else if(bonus&&h.x==bonus.x&&h.y==bonus.y){score+=20;ate=true;bonus=null}
-if(ate){$('sc').textContent=score;speed=Math.max(70,speed-3);blip();khaichi()}else snake.pop();
-if(bonus&&--bonus.ttl<=0)bonus=null;draw()}
-function die(){alive=false;musicStop();scream();gameOverSound.currentTime = 0;
-gameOverSound.play().then(() => {
-  console.log("Game-over sound played!");
-}).catch(error => {
-  console.error("Game-over sound failed:", error);
-});draw(true);
-if(score>best){best=score;$('bs').textContent=best}
-$('res').innerHTML='YOU SCORED<br><b style="font-size:18px">'+score+'</b>';$('over').classList.remove('hide');submit(score)}
-function draw(dead){ctx.fillStyle='#b5d62b';ctx.fillRect(0,0,360,360);
-ctx.fillStyle='#a3c41f';for(let x=0;x<N;x++)for(let y=0;y<N;y++)if((x+y)%2==0)ctx.fillRect(x*S,y*S,S,S);
-ctx.font='15px serif';ctx.textAlign='center';ctx.textBaseline='middle';
-ctx.fillText(food.e,food.x*S+S/2,food.y*S+S/2+1);
-if(bonus){ctx.globalAlpha=bonus.ttl<12&&bonus.ttl%2?.3:1;ctx.fillText('🍋',bonus.x*S+S/2,bonus.y*S+S/2+1);ctx.globalAlpha=1}
-snake.forEach((s,i)=>{ctx.fillStyle=dead?'#7a2a1a':INK;ctx.fillRect(s.x*S+1,s.y*S+1,S-2,S-2);
-if(i==0){ctx.fillStyle='#b5d62b';const ex=dir.x?(dir.x>0?11:3):4,ey=dir.y?(dir.y>0?11:3):4;
-ctx.fillRect(s.x*S+(dir.x?ex:4),s.y*S+(dir.y?ey:4),3,3);ctx.fillRect(s.x*S+(dir.x?ex:11),s.y*S+(dir.y?ey:11),3,3);
-if(dead){ctx.fillStyle='#fff'}}})}
-function turn(d){const m={u:{x:0,y:-1},d:{x:0,y:1},l:{x:-1,y:0},r:{x:1,y:0}}[d];if(!m)return;if(m.x==-dir.x&&m.y==-dir.y&&(m.x||m.y)&&snake.length>1)return;nd=m}
-addEventListener('keydown',e=>{const k={ArrowUp:'u',ArrowDown:'d',ArrowLeft:'l',ArrowRight:'r',w:'u',s:'d',a:'l',d:'r'}[e.key];if(k){if(alive)e.preventDefault();turn(k)}});
-document.querySelectorAll('.pad button').forEach(b=>b.addEventListener('pointerdown',e=>{e.preventDefault();turn(b.dataset.d)}));
-let tx,ty;cv.addEventListener('touchstart',e=>{tx=e.touches[0].clientX;ty=e.touches[0].clientY},{passive:true});
-cv.addEventListener('touchmove',e=>{if(tx==null)return;const dx=e.touches[0].clientX-tx,dy=e.touches[0].clientY-ty;if(Math.abs(dx)>22||Math.abs(dy)>22){turn(Math.abs(dx)>Math.abs(dy)?(dx>0?'r':'l'):(dy>0?'d':'u'));tx=null}},{passive:true});
-$('go').onclick = function () {
-  try {
-    const n = $('nm').value.trim();
-    if (!n) {
-      $('nm').focus();
-      return;
-    }
-    localStorage.setItem('4p_name', n);
-    start();
-  } catch (e) {
-    alert('Game error: ' + e.message);
-    console.error(e);
-  }
-};
+(function () {
+  'use strict';
 
-$('again').onclick = start;
-try{$('nm').value=localStorage.getItem('4p_name')||''}catch(e){}
-const mb=document.createElement('button');mb.className='mute';mb.textContent='🔊';mb.onclick=()=>{muted=!muted;mb.textContent=muted?'🔇':'🔊';if(muted)speechSynthesis&&speechSynthesis.cancel()};document.querySelector('.scr').appendChild(mb);
-// ---------- LEADERBOARD (shared, Firebase Firestore REST) ----------
-const CFG=window.FIREBASE_CONFIG||{};
-const online=!!(CFG.apiKey&&CFG.projectId&&!/YOUR/i.test(CFG.apiKey+CFG.projectId));
-const BASE=online?'https://firestore.googleapis.com/v1/projects/'+CFG.projectId+'/databases/(default)/documents':'';
-const KEY=online?'?key='+encodeURIComponent(CFG.apiKey):'';
-let rows=[];
-function render(){
-  const t = rows.slice().sort((a,b) => b.score - a.score);
-  const m = ['🥇','🥈','🥉'];
+  // ---------- SETUP ----------
+  const N = 20;
+  const S = 18;
+  const SIZE = N * S;
 
-  $('lb').innerHTML = t.length
-    ? t.map((r,i) =>
-        '<div><span class="n">' +
-        (i < 3 ? m[i] : '#' + (i + 1)) +
-        ' ' + esc(r.name) +
-        '</span><b>' + r.score + '</b></div>'
-      ).join('')
-    : '<div>No scores yet. Be the first!</div>';
-}
-function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function loadLocal(){try{rows=JSON.parse(localStorage.getItem('4p_lb')||'[]')}catch(e){rows=[]}}
-function pid(n){return 'p_'+Array.from(new TextEncoder().encode(n.toLowerCase())).map(b=>b.toString(16).padStart(2,'0')).join('')}
-async function fetchTop(){
-try{const r=await fetch(BASE+':runQuery'+KEY,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({structuredQuery:{from:[{collectionId:'scores'}],orderBy:[{field:{fieldPath:'score'},direction:'DESCENDING'}],limit:200}})});
-if(!r.ok)throw 0;const j=await r.json();
-rows=j.filter(x=>x.document).map(x=>({name:x.document.fields.name.stringValue,score:parseInt(x.document.fields.score.integerValue,10)}));
-render();$('lbnote').textContent='Live leaderboard · same for everyone.'}
-catch(e){   loadLocal();   render();   $('lbnote').textContent='Online leaderboard unavailable. Showing this device’s scores.'; }}
-
-async function submit(s) {
-  const name = $('nm').value.trim().slice(0, 14) || 'Player';
-
-  if (!online) {
-    const r = rows.find(x => x.name === name);
-    if (r) {
-      if (s > r.score) r.score = s;
-    } else {
-      rows.push({ name: name, score: s });
-    }
-    try {
-      localStorage.setItem('4p_lb', JSON.stringify(rows));
-    } catch (e) {}
-    render();
+  const cv = document.getElementById('c');
+  if (!cv) {
+    console.error('Game canvas #c was not found.');
     return;
   }
 
+  const ctx = cv.getContext('2d');
+  const $ = id => document.getElementById(id);
+
+  const gameOverSound = new Audio('./gameover.mp3');
+  gameOverSound.preload = 'auto';
+
+  const FOODS = ['🍔', '🍟', '🥤'];
+  const INK = '#1d2a0c';
+
+  let snake = [];
+  let dir = { x: 1, y: 0 };
+  let nd = { x: 1, y: 0 };
+  let food;
+  let score = 0;
+  let alive = false;
+  let timer = null;
+  let speed = 150;
+  let best = 0;
+  let bonus = null;
+
   try {
-    const url = BASE + '/scores/' + pid(name) + KEY;
-    const g = await fetch(url);
-    let old = -1;
+    best = Number(localStorage.getItem('4p_best')) || 0;
+  } catch (e) {}
 
-    if (g.ok) {
-      const d = await g.json();
-      old = parseInt(d.fields.score.integerValue, 10);
-    } else if (g.status !== 404) {
-      $('lbnote').textContent = 'Leaderboard temporarily unavailable';
-      return;
-    }
+  if ($('bs')) $('bs').textContent = best;
 
-    if (s > old) {
-      const w = await fetch(url, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fields: {
-            name: { stringValue: name },
-            score: { integerValue: String(s) },
-            at: { integerValue: String(Date.now()) }
-          }
-        })
-      });
+  // ---------- AUDIO ----------
+  let AC = null;
+  let master = null;
+  let muted = false;
+  let musicOn = false;
+  let musicTimer = null;
+  let musicStep = 0;
+  let khBuf = null;
+  let khLoading = false;
+  let bnVoice = null;
 
-      if (!w.ok) {
-        console.error('Score save failed:', w.status, await w.text());
-        $('lbnote').textContent = 'Score could not be saved';
-        return;
+  const melody = [
+    523, 0, 659, 784, 659, 0, 523, 392,
+    587, 0, 698, 880, 698, 0, 587, 440,
+    523, 659, 784, 1047, 784, 659, 523, 0,
+    392, 494, 587, 494, 392, 0, 330, 0
+  ];
+
+  const bass = [
+    131, 131, 196, 196, 147, 147, 220, 220,
+    131, 131, 196, 196, 98, 98, 165, 165
+  ];
+
+  function ac() {
+    try {
+      if (!AC) {
+        const AudioCtx =
+          window.AudioContext || window.webkitAudioContext;
+
+        if (!AudioCtx) return null;
+
+        AC = new AudioCtx();
+        master = AC.createGain();
+        master.gain.value = 0.5;
+        master.connect(AC.destination);
       }
+
+      if (AC.state === 'suspended') AC.resume();
+      return AC;
+    } catch (e) {
+      console.warn('Audio unavailable:', e);
+      return null;
+    }
+  }
+
+  function tone(freq, time, duration, type, volume, destination) {
+    if (!AC || !master) return;
+
+    try {
+      const osc = AC.createOscillator();
+      const gain = AC.createGain();
+
+      osc.type = type;
+      osc.frequency.value = freq;
+
+      gain.gain.setValueAtTime(Math.max(volume, 0.0001), time);
+      gain.gain.exponentialRampToValueAtTime(
+        0.001,
+        time + duration
+      );
+
+      osc.connect(gain);
+      gain.connect(destination || master);
+
+      osc.start(time);
+      osc.stop(time + duration + 0.02);
+    } catch (e) {}
+  }
+
+  function scheduleMusic() {
+    if (!AC || !musicOn || muted) return;
+
+    const time = AC.currentTime + 0.02;
+    const i = musicStep % melody.length;
+
+    if (melody[i]) {
+      tone(melody[i], time, 0.16, 'square', 0.07);
     }
 
-    await fetchTop();
-  } catch (e) {
-  loadLocal();
-  const name = $('nm').value.trim().slice(0, 14) || 'Player';
-  const r = rows.find(x => x.name === name);
+    if (i % 2 === 0) {
+      tone(
+        bass[(i >> 1) % bass.length],
+        time,
+        0.28,
+        'triangle',
+        0.12
+      );
+    }
 
-  if (r) {
-    r.score = Math.max(r.score, s);
-  } else {
-    rows.push({ name, score: s });
+    musicStep++;
+  }
+
+  function musicStart() {
+    if (!ac()) return;
+
+    musicOn = true;
+    clearInterval(musicTimer);
+    musicTimer = setInterval(scheduleMusic, 140);
+  }
+
+  function musicStop() {
+    musicOn = false;
+    clearInterval(musicTimer);
+    musicTimer = null;
+  }
+
+  function blip() {
+    if (!ac() || muted) return;
+
+    const time = AC.currentTime;
+    tone(880, time, 0.08, 'square', 0.12);
+    tone(1320, time + 0.07, 0.1, 'square', 0.12);
+  }
+
+  function scream() {
+    if (!ac() || muted) return;
+
+    const time = AC.currentTime;
+
+    try {
+      const osc = AC.createOscillator();
+      const gain = AC.createGain();
+
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(500, time);
+      osc.frequency.exponentialRampToValueAtTime(
+        1500,
+        time + 0.25
+      );
+      osc.frequency.exponentialRampToValueAtTime(
+        350,
+        time + 1.1
+      );
+
+      gain.gain.setValueAtTime(0.0001, time);
+      gain.gain.exponentialRampToValueAtTime(0.2, time + 0.05);
+      gain.gain.exponentialRampToValueAtTime(
+        0.001,
+        time + 1.1
+      );
+
+      osc.connect(gain);
+      gain.connect(master);
+      osc.start(time);
+      osc.stop(time + 1.15);
+    } catch (e) {}
+  }
+
+  function pickVoice() {
+    try {
+      if (!('speechSynthesis' in window)) return;
+
+      const voices = speechSynthesis.getVoices();
+      const bengali = voices.filter(v =>
+        /^bn/i.test(v.lang) ||
+        /bengali|bangla/i.test(v.name)
+      );
+
+      bnVoice =
+        bengali.find(v =>
+          /\bmale\b|madhur|pradeep|bashkar/i.test(v.name) &&
+          !/female/i.test(v.name)
+        ) || bengali[0] || null;
+    } catch (e) {}
   }
 
   try {
-    localStorage.setItem('4p_lb', JSON.stringify(rows));
-  } catch (err) {}
+    pickVoice();
 
-  render();
-  $('lbnote').textContent = 'Online leaderboard unavailable. Score saved on this device.';
-  console.error('Leaderboard error:', e);
-}
-}
-draw=draw;reset();draw();
-if(online){$('lb').innerHTML='<div>Loading…</div>';fetchTop();}
-else{loadLocal();render();$('lbnote').textContent='Leaderboard on this device only (online leaderboard not set up).'}
+    if ('speechSynthesis' in window) {
+      speechSynthesis.onvoiceschanged = pickVoice;
+    }
+  } catch (e) {}
+
+  function loadKh() {
+    if (
+      khBuf ||
+      !AC ||
+      khLoading ||
+      typeof KH64 === 'undefined'
+    ) {
+      return;
+    }
+
+    khLoading = true;
+
+    try {
+      const binary = atob(KH64);
+      const bytes = new Uint8Array(binary.length);
+
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+
+      AC.decodeAudioData(
+        bytes.buffer,
+        buffer => {
+          khBuf = buffer;
+          khLoading = false;
+        },
+        () => {
+          khLoading = false;
+        }
+      );
+    } catch (e) {
+      khLoading = false;
+    }
+  }
+
+  function khaichi() {
+    if (muted || !ac()) return;
+
+    loadKh();
+
+    if (khBuf) {
+      try {
+        const source = AC.createBufferSource();
+        const gain = AC.createGain();
+
+        source.buffer = khBuf;
+        source.playbackRate.value = 1.03;
+        gain.gain.value = 1.2;
+
+        source.connect(gain);
+        gain.connect(master);
+        source.start();
+
+        return;
+      } catch (e) {}
+    }
+
+    try {
+      if ('speechSynthesis' in window) {
+        speechSynthesis.cancel();
+
+        const utterance = new SpeechSynthesisUtterance('খাইছি!');
+        utterance.lang = 'bn-BD';
+        utterance.rate = 1.2;
+        utterance.pitch = 0;
+
+        if (bnVoice) {
+          utterance.voice = bnVoice;
+          utterance.lang = bnVoice.lang;
+        }
+
+        speechSynthesis.speak(utterance);
+      }
+    } catch (e) {}
+  }
+
+  // ---------- GAME LOGIC ----------
+  function rnd(n) {
+    return Math.floor(Math.random() * n);
+  }
+
+  function free() {
+    let p;
+
+    do {
+      p = { x: rnd(N), y: rnd(N) };
+    } while (
+      snake.some(s => s.x === p.x && s.y === p.y) ||
+      (bonus && bonus.x === p.x && bonus.y === p.y)
+    );
+
+    return p;
+  }
+
+  function spawn() {
+    food = free();
+    food.e = FOODS[rnd(FOODS.length)];
+  }
+
+  function reset() {
+    snake = [
+      { x: 6, y: 10 },
+      { x: 5, y: 10 },
+      { x: 4, y: 10 }
+    ];
+
+    dir = { x: 1, y: 0 };
+    nd = { x: 1, y: 0 };
+    score = 0;
+    speed = 150;
+    bonus = null;
+
+    spawn();
+
+    if ($('sc')) $('sc').textContent = '0';
+
+    draw();
+  }
+
+  function start() {
+    ac();
+    loadKh();
+
+    setTimeout(loadKh, 300);
+
+    clearTimeout(timer);
+    reset();
+
+    alive = true;
+
+    if ($('start')) $('start').classList.add('hide');
+    if ($('over')) $('over').classList.add('hide');
+
+    musicStart();
+    loop();
+  }
+
+  function loop() {
+    clearTimeout(timer);
+
+    if (!alive) return;
+
+    tick();
+
+    if (alive) {
+      timer = setTimeout(loop, speed);
+    }
+  }
+
+  function tick() {
+    dir = nd;
+
+    const head = {
+      x: snake[0].x + dir.x,
+      y: snake[0].y + dir.y
+    };
+
+    const hitWall =
+      head.x < 0 ||
+      head.y < 0 ||
+      head.x >= N ||
+      head.y >= N;
+
+    const hitSelf = snake.some(
+      s => s.x === head.x && s.y === head.y
+    );
+
+    if (hitWall || hitSelf) {
+      die();
+      return;
+    }
+
+    snake.unshift(head);
+
+    let ate = false;
+
+    if (head.x === food.x && head.y === food.y) {
+      score += 10;
+      ate = true;
+      spawn();
+
+      if (!bonus && Math.random() < 0.2) {
+        bonus = free();
+        bonus.ttl = 50;
+      }
+    } else if (
+      bonus &&
+      head.x === bonus.x &&
+      head.y === bonus.y
+    ) {
+      score += 20;
+      ate = true;
+      bonus = null;
+    }
+
+    if (ate) {
+      if ($('sc')) $('sc').textContent = score;
+
+      speed = Math.max(70, speed - 3);
+      blip();
+      khaichi();
+    } else {
+      snake.pop();
+    }
+
+    if (bonus && --bonus.ttl <= 0) {
+      bonus = null;
+    }
+
+    draw();
+  }
+
+  function die() {
+    alive = false;
+    clearTimeout(timer);
+    musicStop();
+    scream();
+
+    try {
+      gameOverSound.currentTime = 0;
+
+      const playback = gameOverSound.play();
+
+      if (playback && playback.catch) {
+        playback.catch(e => {
+          console.warn('Game-over sound could not play:', e);
+        });
+      }
+    } catch (e) {}
+
+    draw(true);
+
+    if (score > best) {
+      best = score;
+
+      if ($('bs')) $('bs').textContent = best;
+
+      try {
+        localStorage.setItem('4p_best', String(best));
+      } catch (e) {}
+    }
+
+    if ($('res')) {
+      $('res').innerHTML =
+        'YOU SCORED<br><b style="font-size:18px">' +
+        score +
+        '</b>';
+    }
+
+    if ($('over')) $('over').classList.remove('hide');
+
+    submit(score);
+  }
+
+  function draw(dead) {
+    ctx.fillStyle = '#b5d62b';
+    ctx.fillRect(0, 0, SIZE, SIZE);
+
+    ctx.fillStyle = '#a3c41f';
+
+    for (let x = 0; x < N; x++) {
+      for (let y = 0; y < N; y++) {
+        if ((x + y) % 2 === 0) {
+          ctx.fillRect(x * S, y * S, S, S);
+        }
+      }
+    }
+
+    if (food) {
+      ctx.font = '15px serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      ctx.fillText(
+        food.e,
+        food.x * S + S / 2,
+        food.y * S + S / 2 + 1
+      );
+    }
+
+    if (bonus) {
+      ctx.globalAlpha =
+        bonus.ttl < 12 && bonus.ttl % 2 ? 0.3 : 1;
+
+      ctx.fillText(
+        '🍋',
+        bonus.x * S + S / 2,
+        bonus.y * S + S / 2 + 1
+      );
+
+      ctx.globalAlpha = 1;
+    }
+
+    snake.forEach((part, i) => {
+      ctx.fillStyle = dead ? '#7a2a1a' : INK;
+
+      ctx.fillRect(
+        part.x * S + 1,
+        part.y * S + 1,
+        S - 2,
+        S - 2
+      );
+
+      if (i === 0) {
+        ctx.fillStyle = '#b5d62b';
+
+        const ex = dir.x ? (dir.x > 0 ? 11 : 3) : 4;
+        const ey = dir.y ? (dir.y > 0 ? 11 : 3) : 4;
+
+        ctx.fillRect(
+          part.x * S + (dir.x ? ex : 4),
+          part.y * S + (dir.y ? ey : 4),
+          3,
+          3
+        );
+
+        ctx.fillRect(
+          part.x * S + (dir.x ? ex : 11),
+          part.y * S + (dir.y ? ey : 11),
+          3,
+          3
+        );
+      }
+    });
+  }
+
+  function turn(direction) {
+    const moves = {
+      u: { x: 0, y: -1 },
+      d: { x: 0, y: 1 },
+      l: { x: -1, y: 0 },
+      r: { x: 1, y: 0 }
+    };
+
+    const move = moves[direction];
+
+    if (!move) return;
+
+    if (
+      move.x === -dir.x &&
+      move.y === -dir.y &&
+      snake.length > 1
+    ) {
+      return;
+    }
+
+    nd = move;
+  }
+
+  // ---------- CONTROLS ----------
+  window.addEventListener('keydown', e => {
+    const keys = {
+      ArrowUp: 'u',
+      ArrowDown: 'd',
+      ArrowLeft: 'l',
+      ArrowRight: 'r',
+      w: 'u',
+      s: 'd',
+      a: 'l',
+      d: 'r',
+      W: 'u',
+      S: 'd',
+      A: 'l',
+      D: 'r'
+    };
+
+    const direction = keys[e.key];
+
+    if (direction) {
+      if (alive) e.preventDefault();
+      turn(direction);
+    }
+  });
+
+  document.querySelectorAll('.pad button').forEach(button => {
+    button.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      turn(button.dataset.d);
+    });
+  });
+
+  let tx = null;
+  let ty = null;
+
+  cv.addEventListener('touchstart', e => {
+    if (!e.touches.length) return;
+
+    tx = e.touches[0].clientX;
+    ty = e.touches[0].clientY;
+  }, { passive: true });
+
+  cv.addEventListener('touchmove', e => {
+    if (tx === null || !e.touches.length) return;
+
+    const dx = e.touches[0].clientX - tx;
+    const dy = e.touches[0].clientY - ty;
+
+    if (Math.abs(dx) > 22 || Math.abs(dy) > 22) {
+      turn(
+        Math.abs(dx) > Math.abs(dy)
+          ? (dx > 0 ? 'r' : 'l')
+          : (dy > 0 ? 'd' : 'u')
+      );
+
+      tx = null;
+      ty = null;
+    }
+  }, { passive: true });
+
+  cv.addEventListener('touchend', () => {
+    tx = null;
+    ty = null;
+  }, { passive: true });
+
+  // ---------- BUTTONS ----------
+  if ($('go')) {
+    $('go').onclick = function () {
+      try {
+        const name = $('nm').value.trim();
+
+        if (!name) {
+          $('nm').focus();
+          return;
+        }
+
+        localStorage.setItem('4p_name', name);
+        start();
+      } catch (e) {
+        console.error(e);
+        alert('Game error: ' + e.message);
+      }
+    };
+  }
+
+  if ($('again')) {
+    $('again').onclick = start;
+  }
+
+  try {
+    if ($('nm')) {
+      $('nm').value = localStorage.getItem('4p_name') || '';
+    }
+  } catch (e) {}
+
+  const muteButton = document.createElement('button');
+  muteButton.className = 'mute';
+  muteButton.textContent = '🔊';
+
+  muteButton.onclick = () => {
+    muted = !muted;
+    muteButton.textContent = muted ? '🔇' : '🔊';
+
+    if (muted && 'speechSynthesis' in window) {
+      speechSynthesis.cancel();
+    }
+  };
+
+  const screen = document.querySelector('.scr');
+
+  if (screen) screen.appendChild(muteButton);
+
+  // ---------- LEADERBOARD ----------
+  const CFG = window.FIREBASE_CONFIG || {};
+
+  const online = Boolean(
+    CFG.apiKey &&
+    CFG.projectId &&
+    !/YOUR/i.test(CFG.apiKey + CFG.projectId)
+  );
+
+  const BASE = online
+    ? 'https://firestore.googleapis.com/v1/projects/' +
+      CFG.projectId +
+      '/databases/(default)/documents'
+    : '';
+
+  const KEY = online
+    ? '?key=' + encodeURIComponent(CFG.apiKey)
+    : '';
+
+  let rows = [];
+
+  function esc(value) {
+    return String(value).replace(/[&<>"']/g, char => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    })[char]);
+  }
+
+  function render() {
+    if (!$('lb')) return;
+
+    const sorted = rows
+      .slice()
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 200);
+
+    const medals = ['🥇', '🥈', '🥉'];
+
+    $('lb').innerHTML = sorted.length
+      ? sorted.map((row, i) =>
+          '<div><span class="n">' +
+          (i < 3 ? medals[i] : '#' + (i + 1)) +
+          ' ' + esc(row.name) +
+          '</span><b>' + row.score + '</b></div>'
+        ).join('')
+      : '<div>No scores yet. Be the first!</div>';
+  }
+
+  function loadLocal() {
+    try {
+      const data = JSON.parse(
+        localStorage.getItem('4p_lb') || '[]'
+      );
+
+      rows = Array.isArray(data)
+        ? data.filter(r =>
+            r &&
+            typeof r.name === 'string' &&
+            Number.isFinite(Number(r.score))
+          )
+        : [];
+    } catch (e) {
+      rows = [];
+    }
+  }
+
+  function saveLocalScore(name, value) {
+    loadLocal();
+
+    const existing = rows.find(
+      row => row.name.toLowerCase() === name.toLowerCase()
+    );
+
+    if (existing) {
+      existing.score = Math.max(Number(existing.score) || 0, value);
+    } else {
+      rows.push({ name, score: value });
+    }
+
+    try {
+      localStorage.setItem('4p_lb', JSON.stringify(rows));
+    } catch (e) {}
+
+    render();
+  }
+
+  function pid(name) {
+    return 'p_' + Array.from(
+      new TextEncoder().encode(name.toLowerCase())
+    ).map(byte => byte.toString(16).padStart(2, '0')).join('');
+  }
+
+  async function fetchTop() {
+    if (!online) {
+      loadLocal();
+      render();
+
+      if ($('lbnote')) {
+        $('lbnote').textContent =
+          'Leaderboard on this device only.';
+      }
+
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        BASE + ':runQuery' + KEY,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            structuredQuery: {
+              from: [{ collectionId: 'scores' }],
+              orderBy: [{
+                field: { fieldPath: 'score' },
+                direction: 'DESCENDING'
+              }],
+              limit: 200
+            }
+          })
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Leaderboard request failed: ' + response.status);
+      }
+
+      const data = await response.json();
+
+      rows = data
+        .filter(item => item.document)
+        .map(item => ({
+          name: item.document.fields.name.stringValue,
+          score: parseInt(
+            item.document.fields.score.integerValue,
+            10
+          ) || 0
+        }));
+
+      render();
+
+      if ($('lbnote')) {
+        $('lbnote').textContent =
+          'Live leaderboard · same for everyone.';
+      }
+    } catch (e) {
+      loadLocal();
+      render();
+
+      if ($('lbnote')) {
+        $('lbnote').textContent =
+          'Online leaderboard unavailable. Showing this device’s scores.';
+      }
+
+      console.warn('Leaderboard load failed:', e);
+    }
+  }
+
+  async function submit(value) {
+    const name =
+      ($('nm') ? $('nm').value.trim().slice(0, 14) : '') ||
+      'Player';
+
+    // Save locally first, even when Firebase is enabled.
+    saveLocalScore(name, value);
+
+    if (!online) {
+      if ($('lbnote')) {
+        $('lbnote').textContent =
+          'Leaderboard on this device only.';
+      }
+      return;
+    }
+
+    try {
+      const url = BASE + '/scores/' + pid(name) + KEY;
+      const response = await fetch(url);
+
+      let oldScore = -1;
+
+      if (response.ok) {
+        const document = await response.json();
+        oldScore = parseInt(
+          document.fields.score.integerValue,
+          10
+        ) || 0;
+      } else if (response.status !== 404) {
+        throw new Error('Score lookup failed: ' + response.status);
+      }
+
+      if (value > oldScore) {
+        const saved = await fetch(url, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fields: {
+              name: { stringValue: name },
+              score: { integerValue: String(value) },
+              at: { integerValue: String(Date.now()) }
+            }
+          })
+        });
+
+        if (!saved.ok) {
+          throw new Error('Score save failed: ' + saved.status);
+        }
+      }
+
+      await fetchTop();
+    } catch (e) {
+      // The local score is already saved above.
+      if ($('lbnote')) {
+        $('lbnote').textContent =
+          'Online leaderboard unavailable. Score saved on this device.';
+      }
+
+      console.warn('Leaderboard save failed:', e);
+    }
+  }
+
+  // ---------- INITIALIZE ----------
+  reset();
+
+  if (online) {
+    if ($('lb')) $('lb').innerHTML = '<div>Loading…</div>';
+    fetchTop();
+  } else {
+    loadLocal();
+    render();
+
+    if ($('lbnote')) {
+      $('lbnote').textContent =
+        'Leaderboard on this device only (online leaderboard not set up).';
+    }
+  }
 })();
