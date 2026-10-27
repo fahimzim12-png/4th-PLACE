@@ -673,24 +673,9 @@
 
   if (screen) screen.appendChild(muteButton);
 
-  // ---------- LEADERBOARD ----------
-  const CFG = window.FIREBASE_CONFIG || {};
-
-  const online = Boolean(
-    CFG.apiKey &&
-    CFG.projectId &&
-    !/YOUR/i.test(CFG.apiKey + CFG.projectId)
-  );
-
-  const BASE = online
-    ? 'https://firestore.googleapis.com/v1/projects/' +
-      CFG.projectId +
-      '/databases/(default)/documents'
-    : '';
-
-  const KEY = online
-    ? '?key=' + encodeURIComponent(CFG.apiKey)
-    : '';
+ 
+  // ---------- LEADERBOARD (Cloudflare D1) ----------
+  const API = 'https://4th-place-leaderboard.fahimzim12.workers.dev';
 
   let rows = [];
 
@@ -731,14 +716,110 @@
       );
 
       rows = Array.isArray(data)
-        ? data.filter(r =>
-            r &&
-            typeof r.name === 'string' &&
-            Number.isFinite(Number(r.score))
+        ? data.filter(row =>
+            row &&
+            typeof row.name === 'string' &&
+            Number.isFinite(Number(row.score))
           )
         : [];
     } catch (e) {
       rows = [];
+    }
+  }
+
+  function getPlayerId() {
+    try {
+      let id = localStorage.getItem('4p_player_id');
+
+      if (!id) {
+        id = 'p_' + (
+          window.crypto && crypto.randomUUID
+            ? crypto.randomUUID()
+            : Date.now() + '_' + Math.random().toString(36).slice(2)
+        );
+
+        localStorage.setItem('4p_player_id', id);
+      }
+
+      return id;
+    } catch (e) {
+      return 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+    }
+  }
+
+  async function fetchTop() {
+    try {
+      const response = await fetch(API + '/leaderboard');
+
+      if (!response.ok) {
+        throw new Error('Request failed: ' + response.status);
+      }
+
+      const data = await response.json();
+
+      if (!data.ok) {
+        throw new Error(data.error || 'Leaderboard unavailable');
+      }
+
+      rows = (data.scores || []).map(item => ({
+        name: item.player_name,
+        score: Number(item.best_score) || 0
+      }));
+
+      render();
+
+      if ($('lbnote')) {
+        $('lbnote').textContent =
+          'Live leaderboard · same for everyone.';
+      }
+    } catch (e) {
+      loadLocal();
+      render();
+
+      if ($('lbnote')) {
+        $('lbnote').textContent =
+          'Online leaderboard unavailable. Showing this device’s saved scores.';
+      }
+
+      console.warn('Leaderboard loading failed:', e);
+    }
+  }
+
+  async function submit(value) {
+    const name =
+      ($('nm') ? $('nm').value.trim().slice(0, 20) : '') ||
+      'Player';
+
+    // Keep a local backup in case the internet is unavailable.
+    saveLocalScore(name, value);
+
+    try {
+      const response = await fetch(API + '/score', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          player_id: getPlayerId(),
+          player_name: name,
+          score: value
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || 'Score could not be saved');
+      }
+
+      await fetchTop();
+    } catch (e) {
+      if ($('lbnote')) {
+        $('lbnote').textContent =
+          'Online leaderboard unavailable. Score saved on this device.';
+      }
+
+      console.warn('Score submission failed:', e);
     }
   }
 
@@ -762,154 +843,12 @@
     render();
   }
 
-  function pid(name) {
-    return 'p_' + Array.from(
-      new TextEncoder().encode(name.toLowerCase())
-    ).map(byte => byte.toString(16).padStart(2, '0')).join('');
-  }
-
-  async function fetchTop() {
-    if (!online) {
-      loadLocal();
-      render();
-
-      if ($('lbnote')) {
-        $('lbnote').textContent =
-          'Leaderboard on this device only.';
-      }
-
-      return;
-    }
-
-    try {
-      const response = await fetch(
-        BASE + ':runQuery' + KEY,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            structuredQuery: {
-              from: [{ collectionId: 'scores' }],
-              orderBy: [{
-                field: { fieldPath: 'score' },
-                direction: 'DESCENDING'
-              }],
-              limit: 200
-            }
-          })
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error('Leaderboard request failed: ' + response.status);
-      }
-
-      const data = await response.json();
-
-      rows = data
-        .filter(item => item.document)
-        .map(item => ({
-          name: item.document.fields.name.stringValue,
-          score: parseInt(
-            item.document.fields.score.integerValue,
-            10
-          ) || 0
-        }));
-
-      render();
-
-      if ($('lbnote')) {
-        $('lbnote').textContent =
-          'Live leaderboard · same for everyone.';
-      }
-    } catch (e) {
-      loadLocal();
-      render();
-
-      if ($('lbnote')) {
-        $('lbnote').textContent =
-          'Online leaderboard unavailable. Showing this device’s scores.';
-      }
-
-      console.warn('Leaderboard load failed:', e);
-    }
-  }
-
-  async function submit(value) {
-    const name =
-      ($('nm') ? $('nm').value.trim().slice(0, 14) : '') ||
-      'Player';
-
-    // Save locally first, even when Firebase is enabled.
-    saveLocalScore(name, value);
-
-    if (!online) {
-      if ($('lbnote')) {
-        $('lbnote').textContent =
-          'Leaderboard on this device only.';
-      }
-      return;
-    }
-
-    try {
-      const url = BASE + '/scores/' + pid(name) + KEY;
-      const response = await fetch(url);
-
-      let oldScore = -1;
-
-      if (response.ok) {
-        const document = await response.json();
-        oldScore = parseInt(
-          document.fields.score.integerValue,
-          10
-        ) || 0;
-      } else if (response.status !== 404) {
-        throw new Error('Score lookup failed: ' + response.status);
-      }
-
-      if (value > oldScore) {
-        const saved = await fetch(url, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            fields: {
-              name: { stringValue: name },
-              score: { integerValue: String(value) },
-              at: { integerValue: String(Date.now()) }
-            }
-          })
-        });
-
-        if (!saved.ok) {
-          throw new Error('Score save failed: ' + saved.status);
-        }
-      }
-
-      await fetchTop();
-    } catch (e) {
-      // The local score is already saved above.
-      if ($('lbnote')) {
-        $('lbnote').textContent =
-          'Online leaderboard unavailable. Score saved on this device.';
-      }
-
-      console.warn('Leaderboard save failed:', e);
-    }
-  }
-
   // ---------- INITIALIZE ----------
   reset();
 
-  if (online) {
-    if ($('lb')) $('lb').innerHTML = '<div>Loading…</div>';
-    fetchTop();
-  } else {
-    loadLocal();
-    render();
-
-    if ($('lbnote')) {
-      $('lbnote').textContent =
-        'Leaderboard on this device only (online leaderboard not set up).';
-    }
+  if ($('lb')) {
+    $('lb').innerHTML = '<div>Loading…</div>';
   }
+
+  fetchTop();
 })();
