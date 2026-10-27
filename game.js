@@ -18,6 +18,9 @@
   const gameOverSound = new Audio('./gameover.mp3');
   gameOverSound.preload = 'auto';
 
+  const bigFoodSound = new Audio('./Link Road 9 20.m4a');
+bigFoodSound.preload = 'auto';
+
   const FOODS = ['🍔', '🍟', '🥤'];
   const INK = '#1d2a0c';
 
