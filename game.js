@@ -173,8 +173,6 @@ async function submit(s) {
     console.error('Leaderboard error:', e);
   }
 }
-catch(e){}
-fetchTop()}
 draw=draw;reset();draw();
 if(online){$('lb').innerHTML='<div>Loading…</div>';fetchTop();}
 else{loadLocal();render();$('lbnote').textContent='Leaderboard on this device only (online leaderboard not set up).'}
