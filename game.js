@@ -84,7 +84,20 @@ addEventListener('keydown',e=>{const k={ArrowUp:'u',ArrowDown:'d',ArrowLeft:'l',
 document.querySelectorAll('.pad button').forEach(b=>b.addEventListener('pointerdown',e=>{e.preventDefault();turn(b.dataset.d)}));
 let tx,ty;cv.addEventListener('touchstart',e=>{tx=e.touches[0].clientX;ty=e.touches[0].clientY},{passive:true});
 cv.addEventListener('touchmove',e=>{if(tx==null)return;const dx=e.touches[0].clientX-tx,dy=e.touches[0].clientY-ty;if(Math.abs(dx)>22||Math.abs(dy)>22){turn(Math.abs(dx)>Math.abs(dy)?(dx>0?'r':'l'):(dy>0?'d':'u'));tx=null}},{passive:true});
-$('go').onclick=()=>{const n=$('nm').value.trim();if(!n){$('nm').focus();$('nm').style.background='#ffb3a0';return}try{localStorage.setItem('4p_name',n)}catch(e){}start()};
+$('go').onclick = function () {
+  try {
+    const n = $('nm').value.trim();
+    if (!n) {
+      $('nm').focus();
+      return;
+    }
+    localStorage.setItem('4p_name', n);
+    start();
+  } catch (e) {
+    alert('Game error: ' + e.message);
+    console.error(e);
+  }
+};if(!n){$('nm').focus();$('nm').style.background='#ffb3a0';return}try{localStorage.setItem('4p_name',n)}catch(e){}start()};
 $('again').onclick=start;
 try{$('nm').value=localStorage.getItem('4p_name')||''}catch(e){}
 const mb=document.createElement('button');mb.className='mute';mb.textContent='🔊';mb.onclick=()=>{muted=!muted;mb.textContent=muted?'🔇':'🔊';if(muted)speechSynthesis&&speechSynthesis.cancel()};document.querySelector('.scr').appendChild(mb);
