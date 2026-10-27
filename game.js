@@ -116,12 +116,64 @@ if(!r.ok)throw 0;const j=await r.json();
 rows=j.filter(x=>x.document).map(x=>({name:x.document.fields.name.stringValue,score:parseInt(x.document.fields.score.integerValue,10)}));
 render();$('lbnote').textContent='Live leaderboard · same for everyone.'}
 catch(e){$('lbnote').textContent='Leaderboard offline – retrying…'}}
-async function submit(s){const name=$('nm').value.trim().slice(0,14)||'Player';
-if(!online){const r=rows.find(x=>x.name===name);if(r){if(s>r.score)r.score=s}else rows.push({name:name,score:s});try{localStorage.setItem('4p_lb',JSON.stringify(rows))}catch(e){}render();return}
-try{const url=BASE+'/scores/'+pid(name)+KEY;
-const g=await fetch(url);let old=-1;if(g.ok){const d=await g.json();old=parseInt(d.fields.score.integerValue,10)}
-if(s>old){await fetch(url,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({fields:{name:{stringValue:name},score:{integerValue:String(s)},at:{integerValue:String(Date.now())}}})})}
-}catch(e){}
+
+async function submit(s) {
+  const name = $('nm').value.trim().slice(0, 14) || 'Player';
+
+  if (!online) {
+    const r = rows.find(x => x.name === name);
+    if (r) {
+      if (s > r.score) r.score = s;
+    } else {
+      rows.push({ name: name, score: s });
+    }
+    try {
+      localStorage.setItem('4p_lb', JSON.stringify(rows));
+    } catch (e) {}
+    render();
+    return;
+  }
+
+  try {
+    const url = BASE + '/scores/' + pid(name) + KEY;
+    const g = await fetch(url);
+    let old = -1;
+
+    if (g.ok) {
+      const d = await g.json();
+      old = parseInt(d.fields.score.integerValue, 10);
+    } else if (g.status !== 404) {
+      $('lbnote').textContent = 'Leaderboard temporarily unavailable';
+      return;
+    }
+
+    if (s > old) {
+      const w = await fetch(url, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fields: {
+            name: { stringValue: name },
+            score: { integerValue: String(s) },
+            at: { integerValue: String(Date.now()) }
+          }
+        })
+      });
+
+      if (!w.ok) {
+        console.error('Score save failed:', w.status, await w.text());
+        $('lbnote').textContent = 'Score could not be saved';
+        return;
+      }
+    }
+
+    await fetchTop();
+  } catch (e) {
+    $('lbnote').textContent = 'Leaderboard temporarily unavailable';
+    console.error('Leaderboard error:', e);
+  }
+}
+catch(e){}
 fetchTop()}
 draw=draw;reset();draw();
 if(online){$('lb').innerHTML='<div>Loading…</div>';fetchTop();}
