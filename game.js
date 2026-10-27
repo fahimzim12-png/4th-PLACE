@@ -634,13 +634,21 @@ bigFoodSound.preload = 'auto';
       }
     }
 
+   
     if (ate) {
       if ($('sc')) $('sc').textContent = score;
 
       speed = Math.max(70, speed - 3);
-      blip();
-      khaichi();
+
+      if (giantHit) {
+        bigFoodSound.currentTime = 0;
+        bigFoodSound.play().catch(() => {});
+      } else {
+        blip();
+        khaichi();
+      }
     }
+
 
     if (bonus && --bonus.ttl <= 0) {
       bonus = null;
