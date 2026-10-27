@@ -24,7 +24,20 @@
   let snake = [];
   let dir = { x: 1, y: 0 };
   let nd = { x: 1, y: 0 };
-  let food;
+  let foods = [];
+  let giant = null;        // giant food that triggers Dual Snake Mode
+  let snakeB = null;       // second snake (only exists during Dual Mode)
+  let dual = false;
+  let dualEnd = 0;
+  let sinceGiant = 0;
+  let flash = null;
+
+  const DUAL_MS = 30000;   // Dual Mode lasts 30 seconds
+  const DUAL_POINTS = 50;  // points per regular food in Dual Mode
+  const GIANT_POINTS = 20; // points for eating the giant food itself
+  const GIANT_TTL = 80;    // ticks the giant food stays on the board
+  const DUAL_MAX_LEN = 9;  // max length of each snake when splitting
+  const INK_B = '#0f4c5c'; // colour of the second snake
   let score = 0;
   let alive = false;
   let timer = null;
@@ -293,22 +306,178 @@
     return Math.floor(Math.random() * n);
   }
 
+  function inBounds(x, y) {
+    return x >= 0 && y >= 0 && x < N && y < N;
+  }
+
+  function onSnakes(x, y) {
+    return (
+      snake.some(s => s.x === x && s.y === y) ||
+      (snakeB && snakeB.some(s => s.x === x && s.y === y))
+    );
+  }
+
+  function onGiant(x, y) {
+    return (
+      !!giant &&
+      x >= giant.x && x < giant.x + 2 &&
+      y >= giant.y && y < giant.y + 2
+    );
+  }
+
+  function occupied(x, y) {
+    return (
+      onSnakes(x, y) ||
+      onGiant(x, y) ||
+      foods.some(f => f.x === x && f.y === y) ||
+      (bonus && bonus.x === x && bonus.y === y)
+    );
+  }
+
   function free() {
     let p;
 
     do {
       p = { x: rnd(N), y: rnd(N) };
-    } while (
-      snake.some(s => s.x === p.x && s.y === p.y) ||
-      (bonus && bonus.x === p.x && bonus.y === p.y)
-    );
+    } while (occupied(p.x, p.y));
 
     return p;
   }
 
-  function spawn() {
-    food = free();
-    food.e = FOODS[rnd(FOODS.length)];
+  function spawnFood() {
+    const f = free();
+    f.e = FOODS[rnd(FOODS.length)];
+    foods.push(f);
+  }
+
+  // 1 food normally, 2 foods during Dual Mode (so both snakes have a target)
+  function topUpFood() {
+    const target = dual ? 2 : 1;
+    while (foods.length < target) spawnFood();
+  }
+
+  function spawnGiant() {
+    for (let t = 0; t < 200; t++) {
+      const x = rnd(N - 1);
+      const y = rnd(N - 1);
+
+      if (
+        !occupied(x, y) && !occupied(x + 1, y) &&
+        !occupied(x, y + 1) && !occupied(x + 1, y + 1)
+      ) {
+        giant = {
+          x: x,
+          y: y,
+          ttl: GIANT_TTL,
+          e: FOODS[rnd(FOODS.length)]
+        };
+        sinceGiant = 0;
+        return;
+      }
+    }
+  }
+
+  function say(text) {
+    flash = { text: text, until: Date.now() + 1300 };
+  }
+
+  // ----- Dual Snake Mode -----
+  function startDual() {
+    const d = { x: dir.x, y: dir.y };
+    const p = { x: Math.abs(d.y), y: Math.abs(d.x) }; // perpendicular lane direction
+
+    const total = snake.length;
+    const lenA = Math.min(DUAL_MAX_LEN, Math.max(2, Math.ceil(total / 2)));
+    const lenB = Math.min(DUAL_MAX_LEN, Math.max(2, Math.floor(total / 2)));
+    const len = Math.max(lenA, lenB);
+    const head = snake[0];
+
+    // The pair needs room: both lanes, a margin on each side, and 4 cells ahead.
+    function fits(c) {
+      for (let i = -4; i < len; i++) {
+        for (let l = -2; l <= 2; l++) {
+          if (!inBounds(
+            c.x + p.x * l - d.x * i,
+            c.y + p.y * l - d.y * i
+          )) {
+            return false;
+          }
+        }
+      }
+      return true;
+    }
+
+    // Place the pair as close as possible to where the snake currently is.
+    let best = null;
+    let bestDist = Infinity;
+
+    for (let x = 0; x < N; x++) {
+      for (let y = 0; y < N; y++) {
+        const c = { x: x, y: y };
+        if (!fits(c)) continue;
+
+        const dist = Math.abs(x - head.x) + Math.abs(y - head.y);
+        if (dist < bestDist) {
+          best = c;
+          bestDist = dist;
+        }
+      }
+    }
+
+    if (!best) best = { x: N >> 1, y: N >> 1 };
+
+    const a = [];
+    const b = [];
+
+    for (let i = 0; i < lenA; i++) {
+      a.push({
+        x: best.x - p.x - d.x * i,
+        y: best.y - p.y - d.y * i
+      });
+    }
+
+    for (let i = 0; i < lenB; i++) {
+      b.push({
+        x: best.x + p.x - d.x * i,
+        y: best.y + p.y - d.y * i
+      });
+    }
+
+    snake = a;
+    snakeB = b;
+    dual = true;
+    dualEnd = Date.now() + DUAL_MS;
+
+    // Move anything the new snakes landed on.
+    foods = foods.filter(f => !onSnakes(f.x, f.y));
+    if (bonus && onSnakes(bonus.x, bonus.y)) bonus = null;
+
+    say('DUAL SNAKE!');
+  }
+
+  function endDual() {
+    // The second snake is a shifted copy of the first one's path, so sliding
+    // it back onto the first snake and appending it makes the merged snake
+    // "unfurl" to the combined length as it moves.
+    const off = {
+      x: snakeB[0].x - snake[0].x,
+      y: snakeB[0].y - snake[0].y
+    };
+
+    const shifted = snakeB.map(c => ({
+      x: c.x - off.x,
+      y: c.y - off.y
+    }));
+
+    snake = snake.concat(shifted);
+    snakeB = null;
+    dual = false;
+    dualEnd = 0;
+
+    if (foods.length > 1) foods.length = 1; // back to a single food
+    sinceGiant = 0;
+
+    say('MERGED!');
   }
 
   function reset() {
@@ -323,8 +492,15 @@
     score = 0;
     speed = 150;
     bonus = null;
+    foods = [];
+    giant = null;
+    snakeB = null;
+    dual = false;
+    dualEnd = 0;
+    sinceGiant = 0;
+    flash = null;
 
-    spawn();
+    topUpFood();
 
     if ($('sc')) $('sc').textContent = '0';
 
@@ -362,49 +538,71 @@
   }
 
   function tick() {
+    // Time's up: the two snakes merge back into one.
+    if (dual && Date.now() >= dualEnd) endDual();
+
     dir = nd;
 
-    const head = {
-      x: snake[0].x + dir.x,
-      y: snake[0].y + dir.y
-    };
+    const bodies = dual ? [snake, snakeB] : [snake];
 
-    const hitWall =
-      head.x < 0 ||
-      head.y < 0 ||
-      head.x >= N ||
-      head.y >= N;
+    const heads = bodies.map(b => ({
+      x: b[0].x + dir.x,
+      y: b[0].y + dir.y
+    }));
 
-    const hitSelf = snake.some(
-      s => s.x === head.x && s.y === head.y
-    );
-
-    if (hitWall || hitSelf) {
-      die();
-      return;
+    // If EITHER snake crashes (wall, itself, or the other snake), the run ends.
+    for (const h of heads) {
+      if (!inBounds(h.x, h.y) || onSnakes(h.x, h.y)) {
+        die();
+        return;
+      }
     }
 
-    snake.unshift(head);
+    let ate = 0;
+    let regular = 0;
+    let giantHit = false;
 
-    let ate = false;
+    bodies.forEach((body, i) => {
+      const h = heads[i];
+      body.unshift(h);
 
-    if (head.x === food.x && head.y === food.y) {
-      score += 10;
-      ate = true;
-      spawn();
+      let got = false;
+      const fi = foods.findIndex(f => f.x === h.x && f.y === h.y);
 
+      if (fi >= 0) {
+        foods.splice(fi, 1);
+        score += dual ? DUAL_POINTS : 10;
+        regular++;
+        got = true;
+      } else if (bonus && bonus.x === h.x && bonus.y === h.y) {
+        score += dual ? DUAL_POINTS : 20;
+        bonus = null;
+        got = true;
+      } else if (!dual && onGiant(h.x, h.y)) {
+        score += GIANT_POINTS;
+        giant = null;
+        giantHit = true;
+        got = true;
+      }
+
+      if (got) ate++;
+      else body.pop();
+    });
+
+    // Giant food eaten -> split into two snakes.
+    if (giantHit) startDual();
+
+    topUpFood();
+
+    if (regular && !dual) {
       if (!bonus && Math.random() < 0.2) {
         bonus = free();
         bonus.ttl = 50;
       }
-    } else if (
-      bonus &&
-      head.x === bonus.x &&
-      head.y === bonus.y
-    ) {
-      score += 20;
-      ate = true;
-      bonus = null;
+
+      if (!giant && ++sinceGiant >= 5 && Math.random() < 0.5) {
+        spawnGiant();
+      }
     }
 
     if (ate) {
@@ -413,12 +611,15 @@
       speed = Math.max(70, speed - 3);
       blip();
       khaichi();
-    } else {
-      snake.pop();
     }
 
     if (bonus && --bonus.ttl <= 0) {
       bonus = null;
+    }
+
+    if (giant && --giant.ttl <= 0) {
+      giant = null;
+      sinceGiant = 0;
     }
 
     draw();
@@ -466,47 +667,9 @@
     submit(score);
   }
 
-  function draw(dead) {
-    ctx.fillStyle = '#b5d62b';
-    ctx.fillRect(0, 0, SIZE, SIZE);
-
-    ctx.fillStyle = '#a3c41f';
-
-    for (let x = 0; x < N; x++) {
-      for (let y = 0; y < N; y++) {
-        if ((x + y) % 2 === 0) {
-          ctx.fillRect(x * S, y * S, S, S);
-        }
-      }
-    }
-
-    if (food) {
-      ctx.font = '15px serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-
-      ctx.fillText(
-        food.e,
-        food.x * S + S / 2,
-        food.y * S + S / 2 + 1
-      );
-    }
-
-    if (bonus) {
-      ctx.globalAlpha =
-        bonus.ttl < 12 && bonus.ttl % 2 ? 0.3 : 1;
-
-      ctx.fillText(
-        '🍋',
-        bonus.x * S + S / 2,
-        bonus.y * S + S / 2 + 1
-      );
-
-      ctx.globalAlpha = 1;
-    }
-
-    snake.forEach((part, i) => {
-      ctx.fillStyle = dead ? '#7a2a1a' : INK;
+  function drawSnake(body, color, dead) {
+    body.forEach((part, i) => {
+      ctx.fillStyle = dead ? '#7a2a1a' : color;
 
       ctx.fillRect(
         part.x * S + 1,
@@ -536,6 +699,109 @@
         );
       }
     });
+  }
+
+  function draw(dead) {
+    ctx.fillStyle = '#b5d62b';
+    ctx.fillRect(0, 0, SIZE, SIZE);
+
+    ctx.fillStyle = '#a3c41f';
+
+    for (let x = 0; x < N; x++) {
+      for (let y = 0; y < N; y++) {
+        if ((x + y) % 2 === 0) {
+          ctx.fillRect(x * S, y * S, S, S);
+        }
+      }
+    }
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    // big faint countdown number behind everything (Dual Mode only)
+    if (dual && !dead) {
+      const secs = Math.max(0, Math.ceil((dualEnd - Date.now()) / 1000));
+      ctx.globalAlpha = 0.16;
+      ctx.fillStyle = INK;
+      ctx.font = '110px "Press Start 2P", monospace';
+      ctx.fillText(String(secs), SIZE / 2, SIZE / 2);
+      ctx.globalAlpha = 1;
+    }
+
+    ctx.font = '15px serif';
+
+    foods.forEach(f => {
+      ctx.fillText(
+        f.e,
+        f.x * S + S / 2,
+        f.y * S + S / 2 + 1
+      );
+    });
+
+    if (bonus) {
+      ctx.globalAlpha =
+        bonus.ttl < 12 && bonus.ttl % 2 ? 0.3 : 1;
+
+      ctx.fillText(
+        '🍋',
+        bonus.x * S + S / 2,
+        bonus.y * S + S / 2 + 1
+      );
+
+      ctx.globalAlpha = 1;
+    }
+
+    // giant food: 2x2, glowing, blinks before it disappears
+    if (giant) {
+      ctx.globalAlpha = giant.ttl < 15 && giant.ttl % 2 ? 0.35 : 1;
+
+      const pulse = 0.35 + 0.25 * Math.sin(Date.now() / 150);
+      ctx.fillStyle = 'rgba(255, 213, 0, ' + pulse + ')';
+      ctx.fillRect(giant.x * S, giant.y * S, S * 2, S * 2);
+
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(
+        giant.x * S + 1,
+        giant.y * S + 1,
+        S * 2 - 2,
+        S * 2 - 2
+      );
+
+      ctx.font = '30px serif';
+      ctx.fillText(giant.e, giant.x * S + S, giant.y * S + S + 2);
+
+      ctx.globalAlpha = 1;
+      ctx.font = '15px serif';
+    }
+
+    drawSnake(snake, INK, dead);
+    if (snakeB) drawSnake(snakeB, INK_B, dead);
+
+    // countdown bar along the top edge during Dual Mode
+    if (dual && !dead) {
+      const left = Math.max(0, dualEnd - Date.now());
+      const secs = Math.ceil(left / 1000);
+
+      ctx.fillStyle = INK;
+      ctx.fillRect(0, 0, SIZE, 6);
+
+      ctx.fillStyle = secs <= 5 ? '#ff6b3d' : '#ffd500';
+      ctx.fillRect(1, 1, (SIZE - 2) * (left / DUAL_MS), 4);
+    }
+
+    // short announcement banner (DUAL SNAKE! / MERGED!)
+    if (flash && !dead) {
+      if (Date.now() < flash.until) {
+        ctx.font = '16px "Press Start 2P", monospace';
+        ctx.fillStyle = INK;
+        ctx.fillText(flash.text, SIZE / 2 + 2, SIZE / 2 + 2);
+        ctx.fillStyle = '#ffd500';
+        ctx.fillText(flash.text, SIZE / 2, SIZE / 2);
+      } else {
+        flash = null;
+      }
+    }
   }
 
   function turn(direction) {
