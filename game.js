@@ -97,7 +97,7 @@ $('go').onclick = function () {
     alert('Game error: ' + e.message);
     console.error(e);
   }
-};if(!n){$('nm').focus();$('nm').style.background='#ffb3a0';return}try{localStorage.setItem('4p_name',n)}catch(e){}start()};
+$('go').onclick = function () {   try {     const n = $('nm').value.trim();     if (!n) {       $('nm').focus();       return;     }     localStorage.setItem('4p_name', n);     start();   } catch (e) {     alert('Game error: ' + e.message);     console.error(e);   } };
 $('again').onclick=start;
 try{$('nm').value=localStorage.getItem('4p_name')||''}catch(e){}
 const mb=document.createElement('button');mb.className='mute';mb.textContent='🔊';mb.onclick=()=>{muted=!muted;mb.textContent=muted?'🔇':'🔊';if(muted)speechSynthesis&&speechSynthesis.cancel()};document.querySelector('.scr').appendChild(mb);
