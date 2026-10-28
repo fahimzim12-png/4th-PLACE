@@ -755,14 +755,8 @@ topUpFood();
     for (let i = 0; i < heads.length; i++) {
       const h = heads[i];
       const body = bodies[i];
-      if (!inBounds(h.x, h.y)) {
-        die();
-        return;
-      }
-      {
-  die();
-  return;
-}
+      if (!inBounds(h.x, h.y)) 
+     
 if (
   triple &&
   catcher &&
@@ -770,10 +764,7 @@ if (
   h.x < catcher.x + catcher.size &&
   h.y >= catcher.y &&
   h.y < catcher.y + catcher.size
-) {
-  die();
-  return;
-}
+) 
 
 
       const willEat = triple
@@ -786,20 +777,14 @@ if (
           );
 
       const checkBody = willEat ? body : body.slice(0, -1);
-      if (checkBody.some(c => c.x === h.x && c.y === h.y)) {
-        die();
-        return;
-      }
+      if (checkBody.some(c => c.x === h.x && c.y === h.y)) 
     }
 
     // Move the enemy snake and check collisions.
     if (triple && enemySnake) {
       moveEnemySnake();
 
-      if (heads.some(h => enemyHitsHead(h))) {
-        die();
-        return;
-      }
+      if (heads.some(h => enemyHitsHead(h))) 
     }
 
     let ate = 0;
@@ -840,19 +825,11 @@ if (
       if (!got || triple) body.pop();
     });
 
-    // Activate a mode only after processing the food that was eaten.
+    // Activate temporary modes after processing food.
     if (giantHit) startDual();
     if (chocolateHit && !dual) startTriple();
 
     topUpFood();
-
-   
-    // Activate temporary modes after processing the food eaten.
-    if (giantHit) startDual();
-    if (chocolateHit && !dual) startTriple();
-
-    topUpFood();
-
     // Count only regular food eaten outside Dual and Three-Headed Mode.
     if (regular > 0 && !dual && !triple) {
       normalFoodCount += regular;
@@ -1125,23 +1102,30 @@ if (triple && enemySnake) {
   );
 }
 
-// Your existing Three-Headed Mode drawing code continues below.
-if (triple && tripleB && tripleC) {
+
+    // Draw all player snakes.
     if (triple && tripleB && tripleC) {
       drawSnake(tripleB, '#7b3fb5', dead);
       drawSnake(tripleC, '#d45a24', dead);
     }
-    if (snakeB) drawSnake(snakeB, INK_B, dead);
+
+    if (snakeB) {
+      drawSnake(snakeB, INK_B, dead);
+    }
+
     drawSnake(snake, INK, dead);
 
-    // Countdown bar during Three-Headed Mode.
+    // Three-Headed Mode countdown.
     if (triple && !dead) {
       const left = Math.max(0, tripleEnd - Date.now());
       const secs = Math.ceil(left / 1000);
+
       ctx.fillStyle = INK;
       ctx.fillRect(0, 0, SIZE, 6);
+
       ctx.fillStyle = secs <= 5 ? '#ff6b3d' : '#b46cff';
       ctx.fillRect(1, 1, (SIZE - 2) * (left / TRIPLE_MS), 4);
+
       ctx.globalAlpha = 0.16;
       ctx.fillStyle = INK;
       ctx.font = '90px "Press Start 2P", monospace';
@@ -1149,7 +1133,7 @@ if (triple && tripleB && tripleC) {
       ctx.globalAlpha = 1;
     }
 
-    // countdown bar along the top edge during Dual Mode
+    // Dual Mode countdown.
     if (dual && !dead) {
       const left = Math.max(0, dualEnd - Date.now());
       const secs = Math.ceil(left / 1000);
@@ -1161,12 +1145,13 @@ if (triple && tripleB && tripleC) {
       ctx.fillRect(1, 1, (SIZE - 2) * (left / DUAL_MS), 4);
     }
 
-    // short announcement banner (DUAL SNAKE! / MERGED!)
+    // Announcement banner.
     if (flash && !dead) {
       if (Date.now() < flash.until) {
         ctx.font = '16px "Press Start 2P", monospace';
         ctx.fillStyle = INK;
         ctx.fillText(flash.text, SIZE / 2 + 2, SIZE / 2 + 2);
+
         ctx.fillStyle = '#ffd500';
         ctx.fillText(flash.text, SIZE / 2, SIZE / 2);
       } else {
@@ -1174,6 +1159,7 @@ if (triple && tripleB && tripleC) {
       }
     }
   }
+
 
   function turn(direction) {
     const moves = {
