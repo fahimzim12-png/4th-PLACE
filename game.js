@@ -41,6 +41,8 @@ bigFoodSound.preload = 'auto';
   let tripleC = null;
   const TRIPLE_MS = 20000;
   const TRIPLE_POINTS = 20;
+  let normalFoodCount = 0;
+const TRIPLE_FOOD_INTERVAL = 15;
 
   let sinceGiant = 0;
   let flash = null;
@@ -357,126 +359,39 @@ bigFoodSound.preload = 'auto';
   }
 
   
-function free() {
-  const available = [];
 
-  for (let x = 0; x < N; x++) {
-    for (let y = 0; y < N; y++) {
-      if (!occupied(x, y)) {
-        available.push({ x, y });
+  function free() {
+    const available = [];
+
+    for (let x = 0; x < N; x++) {
+      for (let y = 0; y < N; y++) {
+        if (!occupied(x, y)) {
+          available.push({ x, y });
+        }
       }
     }
+
+    if (available.length === 0) return null;
+
+    return available[Math.floor(Math.random() * available.length)];
   }
-
-  if (available.length === 0) {
-    return null;
-  }
-
-  return available[Math.floor(Math.random() * available.length)];
-}
-
-
-function free() {
-  const available = [];
-
-  for (let x = 0; x < N; x++) {
-    for (let y = 0; y < N; y++) {
-      if (!occupied(x, y)) {
-        available.push({ x, y });
-      }
-    }
-  }
-
-  if (available.length === 0) {
-    return null;
-  }
-
-  return available[Math.floor(Math.random() * available.length)];
-}
-
-function spawnFood() {
-  const f = free();
-
-  if (!f) return false;
-
-  f.e = FOODS[rnd(FOODS.length)];
-  foods.push(f);
-
-  return true;
-}
-
-
-function free() {
-  const available = [];
-
-  for (let x = 0; x < N; x++) {
-    for (let y = 0; y < N; y++) {
-      if (!occupied(x, y)) {
-        available.push({ x, y });
-      }
-    }
-  }
-
-  if (available.length === 0) {
-    return null;
-  }
-
-  return available[Math.floor(Math.random() * available.length)];
-}
-
-function spawnFood() {
-  const f = free();
-
-  if (!f) return false;
-
-  f.e = FOODS[rnd(FOODS.length)];
-  foods.push(f);
-
-  return true;
-}
-
-function topUpFood() {
-  const target = dual ? 2 : 1;
-
-  while (foods.length < target) {
-    if (!spawnFood()) break;
-  }
-}
-
-
-function topUpFood() {
-  const target = dual ? 2 : 1;
-
-  while (foods.length < target) {
-    if (!spawnFood()) break;
-  }
-}
-
 
   function spawnFood() {
     const f = free();
+
     if (!f) return false;
+
     f.e = FOODS[rnd(FOODS.length)];
     foods.push(f);
+
     return true;
   }
 
-  // Normal mode: 1 food. Dual mode: 2 foods. Three-Headed Mode: food
-  // occupies every cell not currently occupied by one of the three bodies.
+  // Normal mode: 1 food. Dual mode: 2 foods.
+  // Three-Headed Mode also uses only 1 food at a time.
   function topUpFood() {
-    if (triple) {
-      foods = [];
-      for (let y = 0; y < N; y++) {
-        for (let x = 0; x < N; x++) {
-          if (!onSnakes(x, y)) {
-            foods.push({ x, y, e: FOODS[rnd(FOODS.length)], tripleFood: true });
-          }
-        }
-      }
-      return;
-    }
-
     const target = dual ? 2 : 1;
+
     while (foods.length < target) {
       if (!spawnFood()) break;
     }
@@ -677,6 +592,7 @@ function topUpFood() {
     nd = { x: 1, y: 0 };
     score = 0;
     speed = 150;
+    normalFoodCount = 0;
     bonus = null;
     foods = [];
     giant = null;
@@ -815,20 +731,40 @@ function topUpFood() {
 
     topUpFood();
 
-    if (regular && !dual && !triple) {
-      if (!bonus && Math.random() < 0.2) {
-        const bonusSpot = free();
-        if (bonusSpot) {
-          bonus = bonusSpot;
-          bonus.ttl = 50;
+   
+    // Activate temporary modes after processing the food eaten.
+    if (giantHit) startDual();
+    if (chocolateHit && !dual) startTriple();
+
+    topUpFood();
+
+    // Count only regular food eaten outside Dual and Three-Headed Mode.
+    if (regular > 0 && !dual && !triple) {
+      normalFoodCount += regular;
+
+      if (normalFoodCount >= TRIPLE_FOOD_INTERVAL) {
+        normalFoodCount -= TRIPLE_FOOD_INTERVAL;
+        startTriple();
+      } else {
+        // Bonus lemon.
+        if (!bonus && Math.random() < 0.2) {
+          const bonusSpot = free();
+
+          if (bonusSpot) {
+            bonus = bonusSpot;
+            bonus.ttl = 50;
+          }
+        }
+
+        // Preserve the existing giant-food power-up.
+        // Do not call spawnChocolate(), which is missing in this code.
+        if (!giant && !chocolate && ++sinceGiant >= 5 &&
+            Math.random() < 0.5) {
+          spawnGiant();
         }
       }
-
-      if (!giant && !chocolate && ++sinceGiant >= 5 && Math.random() < 0.5) {
-        if (Math.random() < 0.5) spawnGiant();
-        else spawnChocolate();
-      }
     }
+
 
     if (ate) {
       if ($('sc')) $('sc').textContent = score;
