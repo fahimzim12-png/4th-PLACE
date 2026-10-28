@@ -356,21 +356,102 @@ bigFoodSound.preload = 'auto';
     );
   }
 
-  function free() {
-    // Never let a full/blocked board trap the game in an endless random search.
-    for (let tries = 0; tries < N * N * 2; tries++) {
-      const p = { x: rnd(N), y: rnd(N) };
-      if (!occupied(p.x, p.y)) return p;
-    }
+  
+function free() {
+  const available = [];
 
-    // Fallback scan guarantees we either find a free cell or return safely.
+  for (let x = 0; x < N; x++) {
     for (let y = 0; y < N; y++) {
-      for (let x = 0; x < N; x++) {
-        if (!occupied(x, y)) return { x, y };
+      if (!occupied(x, y)) {
+        available.push({ x, y });
       }
     }
+  }
+
+  if (available.length === 0) {
     return null;
   }
+
+  return available[Math.floor(Math.random() * available.length)];
+}
+
+
+function free() {
+  const available = [];
+
+  for (let x = 0; x < N; x++) {
+    for (let y = 0; y < N; y++) {
+      if (!occupied(x, y)) {
+        available.push({ x, y });
+      }
+    }
+  }
+
+  if (available.length === 0) {
+    return null;
+  }
+
+  return available[Math.floor(Math.random() * available.length)];
+}
+
+function spawnFood() {
+  const f = free();
+
+  if (!f) return false;
+
+  f.e = FOODS[rnd(FOODS.length)];
+  foods.push(f);
+
+  return true;
+}
+
+
+function free() {
+  const available = [];
+
+  for (let x = 0; x < N; x++) {
+    for (let y = 0; y < N; y++) {
+      if (!occupied(x, y)) {
+        available.push({ x, y });
+      }
+    }
+  }
+
+  if (available.length === 0) {
+    return null;
+  }
+
+  return available[Math.floor(Math.random() * available.length)];
+}
+
+function spawnFood() {
+  const f = free();
+
+  if (!f) return false;
+
+  f.e = FOODS[rnd(FOODS.length)];
+  foods.push(f);
+
+  return true;
+}
+
+function topUpFood() {
+  const target = dual ? 2 : 1;
+
+  while (foods.length < target) {
+    if (!spawnFood()) break;
+  }
+}
+
+
+function topUpFood() {
+  const target = dual ? 2 : 1;
+
+  while (foods.length < target) {
+    if (!spawnFood()) break;
+  }
+}
+
 
   function spawnFood() {
     const f = free();
