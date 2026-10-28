@@ -38,6 +38,8 @@ bigFoodSound.preload = 'auto';
   let triple = false;
   let tripleEnd = 0;
   let tripleB = null;
+  let enemySnake = null;
+const ENEMY_SNAKE_LENGTH = 4;
   let tripleC = null;
   let catcher = null;
 const CATCHER_SIZE = 2; // Occupies a 2×2 block
@@ -550,7 +552,59 @@ function spawnCatcher() {
 
   catcher = null;
 }
+function spawnEnemySnake() {
+  // Choose a row that doesn't initially overlap any snake.
+  const safeRows = [];
 
+  for (let y = 0; y < N; y++) {
+    let blocked = false;
+
+    for (let x = 0; x < N; x++) {
+      if (onSnakes(x, y)) {
+        blocked = true;
+        break;
+      }
+    }
+
+    if (!blocked) safeRows.push(y);
+  }
+
+  if (safeRows.length === 0) {
+    enemySnake = null;
+    return;
+  }
+
+  enemySnake = {
+    x: 0,
+    y: safeRows[rnd(safeRows.length)],
+    dir: 1
+  };
+}
+
+function moveEnemySnake() {
+  if (!triple || !enemySnake) return;
+
+  enemySnake.x += enemySnake.dir;
+
+  // Reverse at either edge of the board.
+  if (enemySnake.x >= N - ENEMY_SNAKE_LENGTH) {
+    enemySnake.x = N - ENEMY_SNAKE_LENGTH;
+    enemySnake.dir = -1;
+  } else if (enemySnake.x <= 0) {
+    enemySnake.x = 0;
+    enemySnake.dir = 1;
+  }
+}
+
+function enemyHitsHead(head) {
+  if (!triple || !enemySnake || !head) return false;
+
+  return (
+    head.y === enemySnake.y &&
+    head.x >= enemySnake.x &&
+    head.x < enemySnake.x + ENEMY_SNAKE_LENGTH
+  );
+}
   // ----- Three-Headed Mode -----
   function startTriple() {
     if (dual || triple) return;
@@ -589,12 +643,13 @@ function spawnCatcher() {
       return;
     }
 
-    tripleB = b;
-    tripleC = c;
-   triple = true;
+   tripleB = b;
+tripleC = c;
+triple = true;
 tripleEnd = Date.now() + TRIPLE_MS;
 foods = [];
-spawnCatcher();
+
+spawnEnemySnake();
 topUpFood();
     say('THREE HEADS!');
   }
@@ -605,6 +660,7 @@ topUpFood();
     tripleB = null;
     tripleC = null;
     catcher = null;
+    enemySnake = null;
     foods = foods.filter(f => !f.tripleFood);
     foods = [];
     topUpFood();
@@ -638,6 +694,7 @@ topUpFood();
     sinceGiant = 0;
     flash = null;
     catcher = null;
+    enemySnake = null;
 
     topUpFood();
 
@@ -702,7 +759,18 @@ topUpFood();
         die();
         return;
       }
-      
+      if (
+  triple &&
+  enemySnake &&
+  (
+    enemyHitsHead(h) ||
+    enemyHitsHead(tripleB && tripleB[0]) ||
+    enemyHitsHead(tripleC && tripleC[0])
+  )
+) {
+  die();
+  return;
+}
 if (
   triple &&
   catcher &&
@@ -1028,7 +1096,35 @@ if (triple && catcher) {
 
   ctx.font = '15px serif';
 }
+// Draw the moving enemy snake.
+if (triple && enemySnake) {
+  for (let i = 0; i < ENEMY_SNAKE_LENGTH; i++) {
+    const x = enemySnake.x + i;
 
+    ctx.fillStyle = i === 0 ? '#ff3b30' : '#b3261e';
+    ctx.fillRect(
+      x * S + 1,
+      enemySnake.y * S + 1,
+      S - 2,
+      S - 2
+    );
+  }
+
+  const headX = enemySnake.dir === 1
+    ? enemySnake.x + ENEMY_SNAKE_LENGTH - 1
+    : enemySnake.x;
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(
+    headX * S + (enemySnake.dir === 1 ? S - 7 : 3),
+    enemySnake.y * S + 4,
+    3,
+    3
+  );
+}
+
+// Your existing Three-Headed Mode drawing code continues below.
+if (triple && tripleB && tripleC) {
     if (triple && tripleB && tripleC) {
       drawSnake(tripleB, '#7b3fb5', dead);
       drawSnake(tripleC, '#d45a24', dead);
