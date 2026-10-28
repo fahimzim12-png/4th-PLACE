@@ -648,7 +648,7 @@ tripleC = c;
 triple = true;
 tripleEnd = Date.now() + TRIPLE_MS;
 foods = [];
-
+spawnCatcher();
 spawnEnemySnake();
 topUpFood();
     say('THREE HEADS!');
@@ -759,15 +759,7 @@ topUpFood();
         die();
         return;
       }
-      if (
-  triple &&
-  enemySnake &&
-  (
-    enemyHitsHead(h) ||
-    enemyHitsHead(tripleB && tripleB[0]) ||
-    enemyHitsHead(tripleC && tripleC[0])
-  )
-) {
+      {
   die();
   return;
 }
@@ -795,6 +787,16 @@ if (
 
       const checkBody = willEat ? body : body.slice(0, -1);
       if (checkBody.some(c => c.x === h.x && c.y === h.y)) {
+        die();
+        return;
+      }
+    }
+
+    // Move the enemy snake and check collisions.
+    if (triple && enemySnake) {
+      moveEnemySnake();
+
+      if (heads.some(h => enemyHitsHead(h))) {
         die();
         return;
       }
