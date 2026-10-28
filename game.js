@@ -32,6 +32,14 @@ bigFoodSound.preload = 'auto';
   let snakeB = null;       // second snake (only exists during Dual Mode)
   let dual = false;
   let dualEnd = 0;
+  // Three-Headed Mode
+let chocolate = null;
+let triple = false;
+let tripleEnd = 0;
+let tripleFoods = [];
+
+const TRIPLE_MS = 20000;
+const TRIPLE_POINTS = 20;
   let sinceGiant = 0;
   let flash = null;
 
@@ -354,10 +362,15 @@ bigFoodSound.preload = 'auto';
   }
 
   // 1 food normally, 2 foods during Dual Mode (so both snakes have a target)
-  function topUpFood() {
-    const target = dual ? 2 : 1;
-    while (foods.length < target) spawnFood();
+ function topUpFood() {
+  if (triple) return;
+
+  const target = dual ? 2 : 1;
+
+  while (foods.length < target) {
+    spawnFood();
   }
+}
 
   function spawnGiant() {
     for (let t = 0; t < 200; t++) {
