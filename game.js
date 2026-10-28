@@ -39,10 +39,12 @@ bigFoodSound.preload = 'auto';
   let tripleEnd = 0;
   let tripleB = null;
   let tripleC = null;
+  let catcher = null;
+const CATCHER_SIZE = 2; // Occupies a 2×2 block
   const TRIPLE_MS = 20000;
   const TRIPLE_POINTS = 20;
   let normalFoodCount = 0;
-const TRIPLE_FOOD_INTERVAL = 15;
+const TRIPLE_FOOD_INTERVAL = 7;
 
   let sinceGiant = 0;
   let flash = null;
@@ -522,6 +524,33 @@ const TRIPLE_FOOD_INTERVAL = 15;
     say('MERGED!');
   }
 
+function spawnCatcher() {
+  // Find a safe 2×2 space away from every snake body.
+  for (let attempt = 0; attempt < 200; attempt++) {
+    const x = rnd(N - CATCHER_SIZE + 1);
+    const y = rnd(N - CATCHER_SIZE + 1);
+
+    let blocked = false;
+
+    for (let dx = 0; dx < CATCHER_SIZE; dx++) {
+      for (let dy = 0; dy < CATCHER_SIZE; dy++) {
+        if (onSnakes(x + dx, y + dy)) {
+          blocked = true;
+          break;
+        }
+      }
+      if (blocked) break;
+    }
+
+    if (!blocked) {
+      catcher = { x, y, size: CATCHER_SIZE };
+      return;
+    }
+  }
+
+  catcher = null;
+}
+
   // ----- Three-Headed Mode -----
   function startTriple() {
     if (dual || triple) return;
@@ -562,10 +591,11 @@ const TRIPLE_FOOD_INTERVAL = 15;
 
     tripleB = b;
     tripleC = c;
-    triple = true;
-    tripleEnd = Date.now() + TRIPLE_MS;
-    foods = [];
-    topUpFood();
+   triple = true;
+tripleEnd = Date.now() + TRIPLE_MS;
+foods = [];
+spawnCatcher();
+topUpFood();
     say('THREE HEADS!');
   }
 
@@ -574,6 +604,7 @@ const TRIPLE_FOOD_INTERVAL = 15;
     tripleEnd = 0;
     tripleB = null;
     tripleC = null;
+    catcher = null;
     foods = foods.filter(f => !f.tripleFood);
     foods = [];
     topUpFood();
@@ -606,6 +637,7 @@ const TRIPLE_FOOD_INTERVAL = 15;
     dualEnd = 0;
     sinceGiant = 0;
     flash = null;
+    catcher = null;
 
     topUpFood();
 
@@ -670,6 +702,19 @@ const TRIPLE_FOOD_INTERVAL = 15;
         die();
         return;
       }
+      
+if (
+  triple &&
+  catcher &&
+  h.x >= catcher.x &&
+  h.x < catcher.x + catcher.size &&
+  h.y >= catcher.y &&
+  h.y < catcher.y + catcher.size
+) {
+  die();
+  return;
+}
+
 
       const willEat = triple
         ? foods.some(f => f.x === h.x && f.y === h.y)
@@ -701,7 +746,7 @@ const TRIPLE_FOOD_INTERVAL = 15;
 
       if (fi >= 0) {
         foods.splice(fi, 1);
-        score += triple ? TRIPLE_POINTS : (dual ? DUAL_POINTS : 10);
+       score += triple ? 300 : (dual ? DUAL_POINTS : 10);
         regular++;
         got = true;
       } else if (!triple && !dual && bonus && bonus.x === h.x && bonus.y === h.y) {
@@ -955,6 +1000,34 @@ const TRIPLE_FOOD_INTERVAL = 15;
       ctx.globalAlpha = 1;
       ctx.font = '15px serif';
     }
+
+if (triple && catcher) {
+  ctx.fillStyle = '#6b1d1d';
+  ctx.fillRect(
+    catcher.x * S,
+    catcher.y * S,
+    catcher.size * S,
+    catcher.size * S
+  );
+
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(
+    catcher.x * S + 1,
+    catcher.y * S + 1,
+    catcher.size * S - 2,
+    catcher.size * S - 2
+  );
+
+  ctx.font = '24px serif';
+  ctx.fillText(
+    '🪤',
+    catcher.x * S + catcher.size * S / 2,
+    catcher.y * S + catcher.size * S / 2
+  );
+
+  ctx.font = '15px serif';
+}
 
     if (triple && tripleB && tripleC) {
       drawSnake(tripleB, '#7b3fb5', dead);
