@@ -374,7 +374,7 @@
     const fi = foodAt(h.x, h.y);
     if (fi >= 0) {
       foods.splice(fi, 1);
-      score += CFG.points[mode === 'normal' ? 'food' : mode];   // food / dual / triple
+      score += mode === 'triple' ? 500 : CFG.points[mode === 'normal' ? 'food' : mode];   // food / dual / triple
       return 'food';
     }
     if (mode !== 'normal') return null;
