@@ -18,7 +18,9 @@
     lemon:  { chance: 0.2, ttl: 50 },            // rare bonus after eating
     big:    { afterEats: 5, chance: 0.5, ttl: 80 }, // 🍔 giant / 🍫 chocolate
     dual:   { ms: 30000, maxLen: 9 },            // Dual Snake mode
-    triple: { ms: 20000 },                       // Three-Headed mode
+    triple: { ms: 20000, foods: 3 },             // Three-Headed mode (3 foods on board)
+    enemy:  { len: 4, everyTicks: 1 },           // enemy snake in Three-Headed mode
+                                                 // everyTicks: 1 = same speed as you, 2 = half speed
 
     api: 'https://4th-place-leaderboard.fahimzim12.workers.dev',
     leaderboardRefreshMs: 20000,
@@ -26,7 +28,7 @@
     colors: {
       bg: '#b5d62b', bgAlt: '#a3c41f', ink: '#1d2a0c',
       snakeA: '#1d2a0c', snakeB: '#0f4c5c',
-      snakeC: '#7b3fb5', snakeD: '#d45a24',
+      snakeC: '#7b3fb5', snakeD: '#d45a24', enemy: '#c0201a',
       dead: '#7a2a1a', gold: '#ffd500'
     }
   };
@@ -155,18 +157,22 @@
   // snakes = [{ body: [{x,y}, ...], color }]
   //   normal mode: 1 snake · dual mode: 2 snakes · triple mode: 3 snakes
   let snakes, dir, queue, foods, lemon, big, mode, modeEnd, sinceBig, flash;
+  let enemy = null, enemyTick = 0;   // enemy: { y, left, dx, len } — a bar sliding along row y
   let score = 0, speed = CFG.startSpeed, alive = false, timer = null;
   let best = Number(store.get('4p_best', 0)) || 0;
   setText('bs', best);
 
   // mode: 'normal' | 'dual' | 'triple'
+  // enemy: only exists in triple mode. It patrols ONE row, left->right then right->left.
+  //        Touching it (with any of your snakes) = game over.
   // big : the 2x2 power-up on the board -> { x, y, ttl, kind: 'giant'|'choco', e }
 
   const onSnakes = (x, y) => snakes.some(s => s.body.some(c => c.x === x && c.y === y));
   const onBig = (x, y) => !!big && x >= big.x && x < big.x + 2 && y >= big.y && y < big.y + 2;
   const isLemon = (x, y) => !!lemon && lemon.x === x && lemon.y === y;
   const foodAt = (x, y) => foods.findIndex(f => f.x === x && f.y === y);
-  const occupied = (x, y) => onSnakes(x, y) || onBig(x, y) || isLemon(x, y) || foodAt(x, y) >= 0;
+  const onEnemy = (x, y) => !!enemy && y === enemy.y && x >= enemy.left && x < enemy.left + enemy.len;
+  const occupied = (x, y) => onSnakes(x, y) || onEnemy(x, y) || onBig(x, y) || isLemon(x, y) || foodAt(x, y) >= 0;
 
   // Random empty cell (or null if the board is full). Can never loop forever.
   function free() {
@@ -180,10 +186,9 @@
     return null;
   }
 
-  // Normal = 1 food on the board, Dual = 2. (Triple mode: every empty cell is food.)
+  // Normal = 1 food on the board, Dual = 2, Triple = 3 (see CFG.triple.foods).
   function topUpFood() {
-    if (mode === 'triple') return;
-    const target = mode === 'dual' ? 2 : 1;
+    const target = mode === 'triple' ? CFG.triple.foods : mode === 'dual' ? 2 : 1;
     while (foods.length < target) {
       const p = free();
       if (!p) break;
@@ -286,12 +291,37 @@
     mode = 'triple';
     modeEnd = Date.now() + CFG.triple.ms;
     foods = []; lemon = null; big = null;
+    spawnEnemy(head);
     say('THREE HEADS!');
+  }
+
+  // Enemy patrols a random row that none of your snakes are on right now,
+  // and starts at the side farthest from you.
+  function spawnEnemy(head) {
+    const len = CFG.enemy.len;
+    const busy = new Set();
+    snakes.forEach(s => s.body.forEach(c => busy.add(c.y)));
+    let rows = [];
+    for (let y = 0; y < N; y++) if (!busy.has(y)) rows.push(y);
+    if (!rows.length) for (let y = 0; y < N; y++) rows.push(y);
+    const fromLeft = head.x >= N / 2;           // you're on the right -> enemy starts at the left
+    enemy = { y: rows[rnd(rows.length)], left: fromLeft ? 0 : N - len, dx: fromLeft ? 1 : -1, len };
+    enemyTick = 0;
+  }
+
+  // Slide the enemy one cell; turn around when it reaches either wall.
+  function moveEnemy() {
+    if (!enemy) return;
+    if (++enemyTick < CFG.enemy.everyTicks) return;
+    enemyTick = 0;
+    if (enemy.left + enemy.dx < 0 || enemy.left + enemy.dx + enemy.len > N) enemy.dx = -enemy.dx;
+    enemy.left += enemy.dx;
   }
 
   function endTriple() {
     snakes = [snakes[0]];
     mode = 'normal';
+    enemy = null;
     foods = [];
     topUpFood();
     sinceBig = 0;
@@ -305,7 +335,7 @@
     snakes = [{ body: [{ x: 6, y: 10 }, { x: 5, y: 10 }, { x: 4, y: 10 }], color: C.snakeA }];
     dir = { x: 1, y: 0 };
     queue = [];
-    foods = []; lemon = null; big = null;
+    foods = []; lemon = null; big = null; enemy = null;
     mode = 'normal'; modeEnd = 0; sinceBig = 0; flash = null;
     score = 0; speed = CFG.startSpeed;
     topUpFood();
@@ -335,17 +365,16 @@
 
   // Would this head cell eat something? (no changes made)
   function canEat(h) {
-    return mode === 'triple' || foodAt(h.x, h.y) >= 0 ||
+    return foodAt(h.x, h.y) >= 0 ||
       (mode === 'normal' && (isLemon(h.x, h.y) || onBig(h.x, h.y)));
   }
 
   // Eat whatever is at h. Returns 'food' | 'lemon' | 'giant' | 'choco' | null
   function eat(h) {
-    if (mode === 'triple') { score += CFG.points.triple; return 'food'; }
     const fi = foodAt(h.x, h.y);
     if (fi >= 0) {
       foods.splice(fi, 1);
-      score += mode === 'dual' ? CFG.points.dual : CFG.points.food;
+      score += CFG.points[mode === 'normal' ? 'food' : mode];   // food / dual / triple
       return 'food';
     }
     if (mode !== 'normal') return null;
@@ -366,12 +395,16 @@
 
     if (queue.length) dir = queue.shift();
 
+    // Enemy moves first; if it ran into any part of your snakes, you lose.
+    moveEnemy();
+    if (enemy && snakes.some(s => s.body.some(c => onEnemy(c.x, c.y)))) return die();
+
     const heads = snakes.map(s => ({ x: s.body[0].x + dir.x, y: s.body[0].y + dir.y }));
 
     // 1) wall / self collision
     for (let i = 0; i < heads.length; i++) {
       const h = heads[i], body = snakes[i].body;
-      if (!inBounds(h.x, h.y)) return die();
+      if (!inBounds(h.x, h.y) || onEnemy(h.x, h.y)) return die();
       const check = canEat(h) ? body : body.slice(0, -1);   // tail moves away unless we grow
       if (check.some(c => c.x === h.x && c.y === h.y)) return die();
     }
@@ -386,7 +419,7 @@
         if (r === 'food') regular++;
         if (r === 'giant' || r === 'choco') bigKind = r;
       }
-      if (!r || mode === 'triple') s.body.pop();   // grow only when something was eaten
+      if (!r) s.body.pop();                        // grow only when something was eaten
     });
 
     if (bigKind === 'giant') startDual();
@@ -450,6 +483,20 @@
     });
   }
 
+  function drawEnemy() {
+    for (let i = 0; i < enemy.len; i++) {
+      const x = enemy.left + i;
+      ctx.fillStyle = C.enemy;
+      ctx.fillRect(x * S + 1, enemy.y * S + 1, S - 2, S - 2);
+      ctx.fillStyle = '#fff';                                    // belly stripe
+      ctx.fillRect(x * S + 4, enemy.y * S + 8, S - 8, 2);
+    }
+    const hx = enemy.dx > 0 ? enemy.left + enemy.len - 1 : enemy.left;   // head = leading end
+    ctx.fillStyle = C.gold;                                      // angry eyes
+    ctx.fillRect(hx * S + (enemy.dx > 0 ? 11 : 3), enemy.y * S + 3, 3, 3);
+    ctx.fillRect(hx * S + (enemy.dx > 0 ? 11 : 3), enemy.y * S + 11, 3, 3);
+  }
+
   function drawBig() {
     const blink = big.ttl < 15 && big.ttl % 2;
     ctx.globalAlpha = blink ? 0.35 : 1;
@@ -502,13 +549,7 @@
     ctx.font = '15px serif';
     const emojiAt = (e, x, y) => ctx.fillText(e, x * S + S / 2, y * S + S / 2 + 1);
 
-    if (mode === 'triple') {            // every empty cell is food
-      for (let x = 0; x < N; x++)
-        for (let y = 0; y < N; y++)
-          if (!onSnakes(x, y)) emojiAt(CFG.foods[(x + 2 * y) % CFG.foods.length], x, y);
-    } else {
-      foods.forEach(f => emojiAt(f.e, f.x, f.y));
-    }
+    foods.forEach(f => emojiAt(f.e, f.x, f.y));
 
     if (lemon) {
       ctx.globalAlpha = lemon.ttl < 12 && lemon.ttl % 2 ? 0.3 : 1;
@@ -518,6 +559,7 @@
 
     if (big) { drawBig(); ctx.font = '15px serif'; }
 
+    if (enemy) drawEnemy();
     for (let i = snakes.length - 1; i >= 0; i--) drawSnake(snakes[i], dead);
 
     if (!dead && mode === 'dual') drawCountdown(CFG.dual.ms, C.gold);
@@ -694,5 +736,5 @@
   setInterval(fetchTop, CFG.leaderboardRefreshMs);
 
   // Test hook (does nothing in the real game)
-  if (window.__TEST__) window.__TEST__({ start, tick, turn, get: () => ({ alive, mode, score, snakes, big, foods }) });
+  if (window.__TEST__) window.__TEST__({ start, tick, turn, get: () => ({ alive, mode, score, snakes, big, foods, enemy }) });
 })();
