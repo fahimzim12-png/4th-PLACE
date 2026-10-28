@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The 4th Place – Cravings Chase</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css"></head><body>
+<div class="bg" aria-hidden="true">
+<div class="cloud" style="top:8%;left:0;animation-duration:70s"></div><div class="cloud" style="top:22%;left:0;animation-duration:95s;animation-delay:-40s"></div><div class="cloud" style="top:14%;left:0;animation-duration:80s;animation-delay:-15s"></div>
+<div class="bld" style="left:55%;width:90px;height:260px"></div><div class="bld" style="left:68%;width:200px;height:150px"></div>
+<div class="trees"></div><div class="grass"></div></div>
+<main>
+<section class="phone">
+<div class="scr" style="position:relative">
+<div class="bar"><span>SCORE: <b id="sc">0</b></span><span>BEST: <b id="bs">0</b></span></div>
+<h1>THE <span>4TH</span> PLACE</h1><div class="sub">— The Ultimate Cravings Chase —</div>
+<div class="wrap"><canvas id="c" width="360" height="360"></canvas>
+<div class="ov" id="start"><h2>READY?</h2>
+<div>Eat the food.<br>Don't hit the wall.<br>Don't bite your tail!</div>
+<input id="nm" maxlength="14" placeholder="YOUR NAME" autocomplete="off">
+<button id="go">▶ PLAY</button></div>
+<div class="ov hide" id="over"><h2>GAME OVER</h2><div id="res"></div><button id="again">↻ AGAIN</button></div>
+</div>
+<div class="foot">DATE: 3 NOVEMBER, 2026<br>VENUE: BUP CAMPUS</div>
+</div>
+<div class="pad"><button class="u" data-d="u">▲</button><button class="l" data-d="l">◀</button><button class="d" data-d="d">▼</button><button class="r" data-d="r">▶</button></div>
+</section>
+<aside class="side">
+<div class="card"><span class="pill">3 november · BUP campus</span>
+<h3>🏆 Win free food!</h3>
+Top 3 scorers before the event day pick <b>any one item</b> from our stall — for free. Lemonade, snacks, anything.
+</div>
+<div class="card lb"><h3>🥇 Top 3 Cravings Chasers</h3><div id="lb"><div>Loading…</div></div><div class="muted" id="lbnote"></div></div>
+<div class="card" style="font-size:8px">Controls: Arrow keys / WASD, swipe on the screen, or the pad.<br>🍔 +10 · 🍟 +10 · 🥤 +10 · 🍋 +20 (rare!)</div>
+</aside>
+</main>
+<script src="config.js"></script>
+<script src="khaichi-data.js"></script>
+<script src="game.js"></script></body></html>
